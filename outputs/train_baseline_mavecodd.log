@@ -1,0 +1,24 @@
+======================================================================
+TRAINING PIPELINE: AI-POWERED UNDERWATER HULL INSPECTION DRONE [MAVECODD]
+======================================================================
+Execution Device: cpu
+Loaded splits -> Train: 44, Val: 16
+
+--- Training Traditional ML Baseline (Model A) ---
+Tiling 44 training scenes into 256px patches...
+Training patches: 406 (Defect: 322, Sound: 84)
+Feature matrix shape: (406, 47)
+Scene-grouped CV over C=[0.03, 0.1, 0.3, 1.0, 3.0, 10.0] x PCA=[None, 8, 16] (14 scene groups)...
+Best CV:   C=0.3, PCA=None -> balanced acc 0.820 +/- 0.146
+Chosen (1-SE rule): C=0.03, PCA=None -> CV 0.814, train 0.909
+Train balanced accuracy: 0.9092
+Validation balanced accuracy: 0.9062 (160 patches)
+Baseline training completed in 35.39 seconds.
+Saved baseline checkpoint to C:\Users\Rohan\FOML_proj\models\checkpoints\baseline_mavecodd.joblib
+
+======================================================================
+TRAINING SUCCESSFUL!
+Baseline saved to: C:\Users\Rohan\FOML_proj\models\checkpoints\baseline_mavecodd.joblib
+U-Net saved to: C:\Users\Rohan\FOML_proj\models\checkpoints\unet_mavecodd.pth
+Summary saved to: C:\Users\Rohan\FOML_proj\outputs\metrics\training_summary_mavecodd.json
+======================================================================

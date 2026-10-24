@@ -44,7 +44,8 @@ def main():
     sample_pool = []
     if manifest_file.exists():
         splits = load_split_manifest(manifest_file)
-        sample_pool = splits.get("test", []) + splits.get("val", [])
+        # Held-out TEST scenes only (val was used for threshold calibration)
+        sample_pool = splits.get("test", [])
 
     # Load trained models
     checkpoints_dir = ROOT / config["paths"]["model_dir"]
@@ -81,8 +82,7 @@ def main():
         (44.5, 2.5, 0.7, "corrosion")
     ]
     for idx, (dx, dy, dr, dtype) in enumerate(defect_coords):
-        sample_ref = sample_pool[idx % len(sample_pool)] if sample_pool else None
-        hull.add_defect(x_m=dx, y_m=dy, radius_m=dr, defect_type=dtype, image_sample=sample_ref)
+        hull.add_defect(x_m=dx, y_m=dy, radius_m=dr, defect_type=dtype)
 
     print(f"Hull Surface initialized: {hull.length_m}m x {hull.height_m}m with {len(hull.defects)} registered defects.")
 
@@ -120,6 +120,13 @@ def main():
     print(f"Inspection Run Completed in {sim_result['total_steps']} steps.")
     print(f"Hull Surface Inspected: {sim_result['final_coverage_pct']:.1f}%")
     print(f"Defect Frames Flagged: {sim_result['defects_detected']}")
+    sc = sim_result["detection_scores"]
+    if predictor is not None and sc["frames"]:
+        fmt = lambda v: "n/a" if v is None else f"{v * 100:.1f}%"
+        print("\n--- Frame-level detection vs ground truth ---")
+        print(f"Frames: {sc['frames']} | TP {sc['TP']}  FP {sc['FP']}  FN {sc['FN']}  TN {sc['TN']}")
+        print(f"Accuracy {fmt(sc['accuracy'])} | Precision {fmt(sc['precision'])} | "
+              f"Recall {fmt(sc['recall'])} | Specificity {fmt(sc['specificity'])}")
 
     # 5. Save to PyArrow Parquet
     logs_dir = ROOT / config["paths"]["logs_dir"]

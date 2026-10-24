@@ -1,0 +1,41 @@
+======================================================================
+EVALUATION PIPELINE: AI-POWERED UNDERWATER HULL INSPECTION DRONE [MAVECODD]
+======================================================================
+Split sizes: train=44, val=16, test=16
+U-Net thresholds (calibrated on val): pixel=0.5, area=0.08
+
+[TRAIN] Model A (baseline) on patches...
+  balanced acc 0.9092  acc 0.8768  P 0.9892  R 0.854  F1 0.9167  (406 patches: 322 defect / 84 sound)
+[TRAIN] Model B (U-Net)...
+  Dice 0.6369  IoU 0.5247  | patch balanced acc 0.905  P 0.965  R 0.941  F1 0.9528
+
+[VAL] Model A (baseline) on patches...
+  balanced acc 0.9062  acc 0.85  P 1.0  R 0.8125  F1 0.8966  (160 patches: 128 defect / 32 sound)
+[VAL] Model B (U-Net)...
+  Dice 0.6329  IoU 0.5084  | patch balanced acc 0.9375  P 0.9836  R 0.9375  F1 0.96
+
+[TEST] Model A (baseline) on patches...
+  balanced acc 0.7316  acc 0.7091  P 0.9528  R 0.7014  F1 0.808  (165 patches: 144 defect / 21 sound)
+[TEST] Model B (U-Net)...
+  Dice 0.6546  IoU 0.5102  | patch balanced acc 0.7753  P 0.94  R 0.9792  F1 0.9592
+
+OVERFITTING CHECK (train vs held-out):
+  baseline_patch_balanced_accuracy     train 0.909 | val 0.906 | test 0.732 | gap +0.090 -> Mild overfitting | test 95% CI [0.5814, 0.8589]
+  unet_patch_balanced_accuracy         train 0.905 | val 0.938 | test 0.775 | gap +0.049 -> No meaningful overfitting | test 95% CI [0.6399, 0.891]
+  unet_dice                            train 0.637 | val 0.633 | test 0.655 | gap -0.007 -> No meaningful overfitting | test 95% CI [0.5674, 0.7379]
+
+Optical turbidity stress test on TEST split...
+  turbidity 0.00 (Clear Water): U-Net Dice 0.654, U-Net patch bal acc 0.775, baseline patch bal acc 0.7316
+  turbidity 0.15 (Light Coastal): U-Net Dice 0.538, U-Net patch bal acc 0.758, baseline patch bal acc 0.7232
+  turbidity 0.30 (Harbour Waters): U-Net Dice 0.525, U-Net patch bal acc 0.711, baseline patch bal acc 0.7059
+  turbidity 0.45 (Turbid Estuarine): U-Net Dice 0.510, U-Net patch bal acc 0.714, baseline patch bal acc 0.62
+  turbidity 0.60 (Heavy Turbidity): U-Net Dice 0.491, U-Net patch bal acc 0.667, baseline patch bal acc 0.6245
+
+Cross-domain test: corrosion U-Net on Underwater Crack test images (zero-shot)...
+  Dice 0.0662  IoU 0.0384  pixel recall 0.3585
+
+======================================================================
+EVALUATION FINISHED!
+Metrics saved to: C:\Users\Rohan\FOML_proj\outputs\metrics\test_metrics_mavecodd.json
+Figures saved to: C:\Users\Rohan\FOML_proj\outputs\figures
+======================================================================

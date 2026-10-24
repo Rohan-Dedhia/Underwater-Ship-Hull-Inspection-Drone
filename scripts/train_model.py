@@ -22,6 +22,11 @@ def main():
                         help="Dataset to train on (default: mavecodd)")
     parser.add_argument("--epochs", type=int, default=None, help="Override number of training epochs")
     parser.add_argument("--device", choices=["auto", "cuda", "cpu"], default="auto", help="Compute device")
+    parser.add_argument("--only", choices=["baseline", "unet"], default=None,
+                        help="Train only one model and keep the other model's checkpoint and summary")
+    parser.add_argument("--resume", nargs="?", const="auto", default=None,
+                        help="Resume U-Net training. With no value, uses models/checkpoints/unet_<dataset>_last.pth; "
+                             "a final checkpoint (weights only) is used as a warm start")
     args = parser.parse_args()
 
     print("=" * 70)
@@ -47,49 +52,64 @@ def main():
     checkpoints_dir = ROOT / config["paths"]["model_dir"]
     checkpoints_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1. Train Model A: Traditional ML Baseline
-    baseline_path = checkpoints_dir / f"baseline_{args.dataset}.joblib"
-    baseline_results = train_baseline(
-        train_samples=train_samples,
-        val_samples=val_samples,
-        config=config,
-        save_path=baseline_path
-    )
-
-    # 2. Train Model B: Deep Learning U-Net
-    if args.epochs is not None:
-        config["cnn_model"]["epochs"] = args.epochs
-
-    unet_path = checkpoints_dir / f"unet_{args.dataset}.pth"
-    unet_results = train_unet(
-        train_samples=train_samples,
-        val_samples=val_samples,
-        config=config,
-        save_path=unet_path,
-        device=dev
-    )
-
-    # Save training history summary
     metrics_dir = ROOT / config["paths"]["metrics_dir"]
     metrics_dir.mkdir(parents=True, exist_ok=True)
-    summary = {
-        "dataset": args.dataset,
-        "device": str(dev),
-        "baseline": {
-            "training_time_s": baseline_results["training_time_s"],
-            "val_accuracy": baseline_results["val_accuracy"],
-            "checkpoint": str(baseline_path.name)
-        },
-        "unet": {
-            "training_time_s": unet_results["training_time_s"],
-            "best_val_loss": unet_results["best_val_loss"],
-            "checkpoint": str(unet_path.name),
-            "final_val_iou": unet_results["history"]["val_iou"][-1] if unet_results["history"]["val_iou"] else None,
-            "final_val_dice": unet_results["history"]["val_dice"][-1] if unet_results["history"]["val_dice"] else None
-        }
-    }
-
     summary_file = metrics_dir / f"training_summary_{args.dataset}.json"
+    summary = {}
+    if args.only and summary_file.exists():
+        summary = json.loads(summary_file.read_text(encoding="utf-8"))
+    summary.update({"dataset": args.dataset, "device": str(dev),
+                    "split_sizes": {k: len(v) for k, v in splits.items()}})
+
+    baseline_path = checkpoints_dir / f"baseline_{args.dataset}.joblib"
+    unet_path = checkpoints_dir / f"unet_{args.dataset}.pth"
+
+    # 1. Train Model A: Traditional ML Baseline
+    if args.only != "unet":
+        baseline_results = train_baseline(
+            train_samples=train_samples,
+            val_samples=val_samples,
+            config=config,
+            save_path=baseline_path
+        )
+        summary["baseline"] = {
+            "training_time_s": round(baseline_results["training_time_s"], 2),
+            "n_train_patches": baseline_results["n_train_patches"],
+            "feature_dim": baseline_results["feature_dim"],
+            "train_balanced_accuracy": baseline_results["train_balanced_accuracy"],
+            "val_balanced_accuracy": baseline_results["val_balanced_accuracy"],
+            "cv": baseline_results["cv"],
+            "checkpoint": str(baseline_path.name)
+        }
+
+    # 2. Train Model B: Deep Learning U-Net
+    if args.only != "baseline":
+        if args.epochs is not None:
+            config["cnn_model"]["epochs"] = args.epochs
+        resume_path = None
+        if args.resume:
+            resume_path = Path(args.resume) if args.resume != "auto" else checkpoints_dir / f"unet_{args.dataset}_last.pth"
+            if not resume_path.exists():
+                parser.error(f"Resume checkpoint {resume_path} not found")
+        unet_results = train_unet(
+            train_samples=train_samples,
+            val_samples=val_samples,
+            config=config,
+            save_path=unet_path,
+            device=dev,
+            resume_path=resume_path
+        )
+        summary["unet"] = {
+            "training_time_s": round(unet_results["training_time_s"], 2),
+            "n_params": unet_results["n_params"],
+            "best_epoch": unet_results["best_epoch"],
+            "stopped_early": unet_results["stopped_early"],
+            "best_val_loss": unet_results["best_val_loss"],
+            "calibration": unet_results["calibration"],
+            "history": unet_results["history"],
+            "checkpoint": str(unet_path.name),
+        }
+
     with open(summary_file, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
 

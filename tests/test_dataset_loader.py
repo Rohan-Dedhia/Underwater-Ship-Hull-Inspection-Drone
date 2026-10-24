@@ -7,6 +7,8 @@ from pathlib import Path
 from src.data.annotation_parser import parse_mavecodd_mask, parse_crack_mask, extract_defect_boxes
 from src.data.preprocessing import resize_image_and_mask, apply_underwater_degradation
 from src.data.split_dataset import create_leakage_free_splits
+from src.data.dataset_loader import sequence_scene_id
+from src.data.preprocessing import extract_patch_grid, label_patch
 
 
 def test_parse_mavecodd_mask():
@@ -83,3 +85,38 @@ def test_leakage_free_splits():
     assert len(train_scenes.intersection(test_scenes)) == 0, "Leakage detected between train and test!"
     assert len(val_scenes.intersection(test_scenes)) == 0, "Leakage detected between val and test!"
     assert len(splits["train"]) + len(splits["val"]) + len(splits["test"]) == 24
+
+
+def test_sequence_scene_id_groups_consecutive_frames():
+    """Near-duplicate consecutive frames must share a scene group."""
+    assert sequence_scene_id("colorImage1005", "LoRes") == sequence_scene_id("colorImage1009", "LoRes")
+    assert sequence_scene_id("colorImage1009", "LoRes") != sequence_scene_id("colorImage1010", "LoRes")
+    assert sequence_scene_id("hull005", "HiRes") != sequence_scene_id("hull005", "LoRes")
+
+
+def test_stratified_splits_cover_every_stratum():
+    samples = [
+        {"image_id": f"{tier}_{i}", "scene_id": f"{tier}_g{i // 3}", "resolution_tier": tier}
+        for tier in ("HiRes", "LoRes") for i in range(30)
+    ]
+    splits = create_leakage_free_splits(samples, 0.6, 0.2, 0.2, group_key="scene_id",
+                                        random_seed=0, stratify_key="resolution_tier")
+    for name in ("train", "val", "test"):
+        assert {s["resolution_tier"] for s in splits[name]} == {"HiRes", "LoRes"}, name
+    groups = [{s["scene_id"] for s in splits[n]} for n in ("train", "val", "test")]
+    assert not (groups[0] & groups[1]) and not (groups[0] & groups[2]) and not (groups[1] & groups[2])
+    assert sum(len(v) for v in splits.values()) == 60
+
+
+def test_patch_grid_labels():
+    img = np.zeros((512, 1024, 3), dtype=np.uint8)
+    mask = np.zeros((512, 1024), dtype=np.uint8)
+    mask[0:256, 0:256] = 1          # first tile fully corroded
+    mask[0:5, 256:512] = 1          # second tile: ~2% -> ambiguous
+    patches = extract_patch_grid(img, mask, long_side=1024, patch_size=256)
+    assert len(patches) == 8
+    by_pos = {(p["x"], p["y"]): p["label"] for p in patches}
+    assert by_pos[(0, 0)] == 1
+    assert by_pos[(256, 0)] == -1
+    assert by_pos[(512, 256)] == 0
+    assert label_patch(0.05) == 1 and label_patch(0.005) == 0 and label_patch(0.02) == -1

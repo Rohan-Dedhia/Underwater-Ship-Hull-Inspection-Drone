@@ -74,7 +74,7 @@ def main():
     print("\n[3/3] Task Formulation & Annotation Compatibility Verification:")
     print("  - Annotation Format: Pixel-level binary segmentation masks available for both datasets.")
     print("  - Selected Vision Tasks:")
-    print("    * Model A (Traditional ML Baseline): Image/Tile-level Defect Classification (HOG+Color+SVM)")
+    print("    * Model A (Traditional ML Baseline): Image/Tile-level Defect Classification (colour/texture features + SVM)")
     print("    * Model B (Deep Learning): U-Net Pixel-Level Defect Segmentation with Bounding-Box Localization")
     print("  - Cross-Domain Strategy: Primary training on MaVeCoDD corrosion; zero-shot / fine-tuned transfer")
     print("    evaluation on Underwater Crack dataset to test generalization to underwater environment.")

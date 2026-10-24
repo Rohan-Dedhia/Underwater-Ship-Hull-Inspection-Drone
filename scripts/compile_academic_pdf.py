@@ -37,9 +37,42 @@ def compile_pdf():
     with open(MD_PATH, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
+    cell_style = ParagraphStyle("CellC", parent=body_style, fontSize=7.5, leading=9, spaceAfter=0)
+
+    def md_inline(text):
+        text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
+        text = re.sub(r'\*(.*?)\*', r'<i>\1</i>', text)
+        text = re.sub(r'\$(.*?)\$', lambda m: m.group(1).replace(r'\tau', 'tau'), text)
+        return text.replace("&", "&amp;").replace("&amp;bull;", "&bull;").replace("&amp;times;", "&times;")
+
+    def flush_table(rows):
+        """Render a Markdown table (header, separator, body rows) as a ReportLab Table."""
+        cells = [[c.strip() for c in r.strip().strip("|").split("|")] for r in rows]
+        cells = [r for r in cells if not all(set(c) <= set(":- ") for c in r)]
+        if not cells:
+            return
+        data = [[Paragraph(md_inline(c), cell_style) for c in r] for r in cells]
+        table = Table(data, repeatRows=1, hAlign="LEFT")
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8eef3")),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#b0bec5")),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 2),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ]))
+        story.append(table)
+        story.append(Spacer(1, 6))
+
+    table_rows = []
     current_section = None
     for line in lines:
         line_str = line.strip()
+        if line_str.startswith("|"):
+            table_rows.append(line_str)
+            continue
+        if table_rows:
+            flush_table(table_rows)
+            table_rows = []
         if not line_str:
             continue
         if line_str.startswith("# ") or line_str.startswith("**Course"):
@@ -57,8 +90,6 @@ def compile_pdf():
             text = re.sub(r'\*(.*?)\*', r'<i>\1</i>', text)
             text = text.replace("&", "&amp;").replace("&amp;bull;", "&bull;").replace("&amp;times;", "&times;")
             story.append(Paragraph(f"&bull; {text}", bullet_style))
-        elif line_str.startswith("|"):
-            continue
         else:
             text = line_str
             text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
@@ -66,6 +97,8 @@ def compile_pdf():
             text = text.replace("&", "&amp;").replace("&amp;bull;", "&bull;").replace("&amp;times;", "&times;")
             story.append(Paragraph(text, body_style))
 
+    if table_rows:
+        flush_table(table_rows)
     doc.build(story)
     print(f"Academic Report PDF compiled successfully: {PDF_PATH}")
 

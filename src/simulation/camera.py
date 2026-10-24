@@ -7,7 +7,7 @@ import cv2
 from PIL import Image
 
 from src.data.preprocessing import apply_underwater_degradation
-from src.data.dataset_loader import scan_mavecodd_samples, load_image_and_mask
+from src.data.dataset_loader import load_image_and_mask
 
 
 def generate_realistic_hull_plate(
@@ -66,13 +66,96 @@ def generate_realistic_hull_plate(
         cv2.circle(img, (anode_x + 70, anode_y + 20), 4, (40, 40, 40), -1)
         cv2.putText(img, "ZINC ANODE", (anode_x + 10, anode_y + 25), cv2.FONT_HERSHEY_SIMPLEX, 0.32, (30, 30, 30), 1)
 
-    # Water runoff streaks & rust drip staining
+    # Faint dark water-runoff stains (deliberately NOT rust-coloured: this plate is defect-free)
     for _ in range(5):
         rx = int(rng.integers(50, w - 50))
         streak_len = int(rng.integers(40, 120))
-        cv2.line(img, (rx, seam_y), (rx + int(rng.integers(-5, 5)), seam_y + streak_len), (160, 70, 20), 2)
+        stain = tuple(int(max(0, c - 18)) for c in base_color)
+        cv2.line(img, (rx, seam_y), (rx + int(rng.integers(-5, 5)), seam_y + streak_len), stain, 2)
 
     return img
+
+
+def draw_synthetic_corrosion(img: np.ndarray, mask: np.ndarray, cx: int, cy: int, radius_px: int, seed: int) -> None:
+    """Paint an irregular rust patch (in place) and mark it in the ground-truth mask."""
+    rng = np.random.default_rng(seed)
+    h, w = img.shape[:2]
+    blob = np.zeros((h, w), dtype=np.uint8)
+    for _ in range(6):
+        ox, oy = rng.integers(-radius_px // 2, radius_px // 2 + 1, size=2)
+        ax = int(radius_px * rng.uniform(0.4, 0.8))
+        ay = int(radius_px * rng.uniform(0.3, 0.7))
+        cv2.ellipse(blob, (int(cx + ox), int(cy + oy)), (max(ax, 3), max(ay, 3)),
+                    int(rng.integers(0, 180)), 0, 360, 1, -1)
+    rust = np.clip(np.array([165, 85, 30], np.int16) + rng.normal(0, 28, (h, w, 3)), 0, 255).astype(np.uint8)
+    m = blob > 0
+    img[m] = rust[m]
+    mask[m] = 1
+
+
+def looks_like_hull_plate(window: np.ndarray, max_sky: float = 0.01, max_white: float = 0.01) -> bool:
+    """Content filter (independent of any model): reject windows that show sky or bright-white
+    deck structures such as railings. Dry-dock photos often include the deck above the hull,
+    which an ROV camera facing the submerged hull would never see."""
+    f = window.reshape(-1, 3).astype(np.int16)
+    r, g, b = f[:, 0], f[:, 1], f[:, 2]
+    sky = ((b > r + 15) & (b > 120)).mean()
+    white = ((r > 190) & (g > 190) & (b > 190)).mean()
+    return sky < max_sky and white < max_white
+
+
+def build_frame_bank(
+    samples: List[Dict[str, Any]],
+    long_side: int = 1024,
+    frame_size: Tuple[int, int] = (640, 480),
+    stride: int = 32,
+    sound_max_frac: float = 0.01,
+    defect_min_frac: float = 0.10
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Cut camera-sized windows out of real hull photos (with their ground-truth masks).
+
+    Windows with <= sound_max_frac corrosion become 'sound' frames, windows with
+    >= defect_min_frac become 'defect' frames; in-between windows and windows that do not
+    show hull plate (sky, deck railings) are not used.
+    """
+    from src.data.preprocessing import resize_long_side
+
+    fw, fh = frame_size
+    bank: Dict[str, List[Dict[str, Any]]] = {"sound": [], "defect": []}
+    for s in samples:
+        img, mask = load_image_and_mask(s)
+        img, mask = resize_long_side(img, mask, long_side)
+        H, W = mask.shape
+        if H < fh or W < fw:
+            continue
+        for y in range(0, H - fh + 1, stride):
+            for x in range(0, W - fw + 1, stride):
+                win_mask = mask[y:y + fh, x:x + fw]
+                frac = float(win_mask.mean())
+                kind = "sound" if frac <= sound_max_frac else ("defect" if frac >= defect_min_frac else None)
+                if kind and looks_like_hull_plate(img[y:y + fh, x:x + fw]):
+                    bank[kind].append({
+                        "image": img[y:y + fh, x:x + fw].copy(),
+                        "mask": win_mask.copy(),
+                        "defect_frac": frac,
+                        "image_id": f"{s.get('image_id')}@x{x}y{y}",
+                        "dataset_source": f"{s.get('dataset_source', 'mavecodd')}_heldout_test",
+                    })
+    return bank
+
+
+def load_heldout_frame_samples() -> List[Dict[str, Any]]:
+    """MaVeCoDD TEST-split scenes (never used for training or threshold calibration)."""
+    from src.data.split_dataset import load_split_manifest
+    root = Path(__file__).resolve().parents[2]
+    manifest = root / "data" / "processed" / "split_manifest_mavecodd.json"
+    if not manifest.exists():
+        return []
+    try:
+        samples = load_split_manifest(manifest)["test"]
+    except Exception:
+        return []
+    return [s for s in samples if Path(s.get("image_path", "")).exists() or Path(s.get("zip_path", "")).exists()]
 
 
 class SimulatedUnderwaterCamera:
@@ -86,7 +169,8 @@ class SimulatedUnderwaterCamera:
         red_attenuation: float = 0.50,
         contrast_factor: float = 0.88,
         resolution: Tuple[int, int] = (640, 480),
-        random_seed: int = 42
+        random_seed: int = 42,
+        frame_samples: Optional[List[Dict[str, Any]]] = None
     ):
         self.fov_deg = fov_deg
         self.aspect_ratio = aspect_ratio
@@ -97,12 +181,23 @@ class SimulatedUnderwaterCamera:
         self.rng = np.random.default_rng(random_seed)
         self.frame_count = 0
 
-        # Auto-load real MaVeCoDD ship hull dataset samples
-        root = Path(__file__).resolve().parents[2]
-        self.real_hull_samples = scan_mavecodd_samples(
-            root / "data/raw/mavecodd",
-            zip_fallback=root / "ry392rp8cj-1.zip"
-        )
+        # Frames come from HELD-OUT test photos (built lazily on first capture). If the dataset
+        # is missing, a synthetic plate with painted corrosion is used instead.
+        self.frame_samples = frame_samples
+        self._frame_bank: Optional[Dict[str, List[Dict[str, Any]]]] = None
+
+    def get_frame_bank(self, sample_pool: Optional[List[Dict[str, Any]]] = None) -> Dict[str, List[Dict[str, Any]]]:
+        """Build (once) the bank of real held-out camera frames."""
+        if self._frame_bank is None:
+            samples = sample_pool or self.frame_samples
+            if samples is None:
+                samples = load_heldout_frame_samples()
+            try:
+                self._frame_bank = build_frame_bank(samples, frame_size=self.resolution) if samples else {"sound": [], "defect": []}
+            except Exception as e:
+                print(f"Warning: could not build frame bank ({e}); using synthetic plates.")
+                self._frame_bank = {"sound": [], "defect": []}
+        return self._frame_bank
 
     def calculate_footprint(self, standoff_z_m: float) -> Tuple[float, float]:
         """Compute the physical dimensions (width, height) of hull area in camera FOV."""
@@ -137,39 +232,51 @@ class SimulatedUnderwaterCamera:
                 intersecting_defect = d
                 break
 
-        pool = sample_pool if sample_pool else self.real_hull_samples
-
-        # 1. If defect present, load corresponding real ship corrosion image
-        if intersecting_defect is not None and intersecting_defect.get("image_sample"):
-            raw_img, raw_mask = load_image_and_mask(intersecting_defect["image_sample"])
-            image_source = intersecting_defect["image_sample"].get("dataset_source", "mavecodd")
-            image_id = intersecting_defect["image_sample"].get("image_id", "sample_defect")
-            gt_defect = True
-        elif pool and len(pool) > 0:
-            # Map coordinates to a deterministic real ship hull photograph from dataset
-            idx = int(abs(drone_x * 5 + drone_y * 7)) % len(pool)
-            s = pool[idx]
-            raw_img, raw_mask = load_image_and_mask(s)
-            image_source = s.get("dataset_source", "mavecodd_hull_photo")
-            image_id = s.get("image_id", f"hull_frame_{idx}")
-            gt_defect = (np.sum(raw_mask > 0) > 40)
+        bank = self.get_frame_bank(sample_pool)
+        gt_mask = None
+        if bank["sound"] and bank["defect"]:
+            # Real held-out photo: corroded window over a registered defect, clean window elsewhere
+            if intersecting_defect is not None:
+                d_idx = int(intersecting_defect["defect_id"].split("_")[-1])
+                k = (d_idx * 37 + int(drone_x * 2) + int(drone_y * 3)) % len(bank["defect"])
+                frame = bank["defect"][k]
+            else:
+                k = (int(drone_x * 2) * 13 + int(drone_y * 2) * 7) % len(bank["sound"])
+                frame = bank["sound"][k]
+            raw_img, gt_mask = frame["image"], frame["mask"]
+            image_source = frame["dataset_source"]
+            image_id = frame["image_id"]
         else:
-            # Generate authentic steel hull plate with welded seams and draft markings
+            # Synthetic fallback: clean plate, corrosion painted where registered defects project
             raw_img = generate_realistic_hull_plate(drone_x, drone_y, resolution=self.resolution)
+            gt_mask = np.zeros(raw_img.shape[:2], dtype=np.uint8)
+            w_px, h_px = self.resolution
+            for d in hull_defects:
+                if abs(d["x_m"] - drone_x) <= d.get("radius_m", 1.0) + footprint_w / 2 and \
+                        abs(d["y_m"] - drone_y) <= d.get("radius_m", 1.0) + footprint_h / 2:
+                    cx = int((d["x_m"] - x_min) / footprint_w * w_px)
+                    cy = int((1.0 - (d["y_m"] - y_min) / footprint_h) * h_px)
+                    r = int(d.get("radius_m", 1.0) / footprint_w * w_px)
+                    draw_synthetic_corrosion(raw_img, gt_mask, cx, cy, max(r, 8),
+                                             seed=int(d["defect_id"].split("_")[-1]))
             image_source = "synthetic_vessel_plating"
             image_id = f"hull_plate_{int(drone_x)}_{int(drone_y)}"
-            gt_defect = False
 
         # Resize to sensor resolution
         obs_clean = cv2.resize(raw_img, self.resolution, interpolation=cv2.INTER_AREA)
+        gt_mask = cv2.resize(gt_mask, self.resolution, interpolation=cv2.INTER_NEAREST)
+        gt_frac = float(gt_mask.mean())
+        # Frame ground truth uses the same rule as a defect patch: >= 5% of pixels are corrosion
+        gt_defect = gt_frac >= 0.05
 
-        # Apply realistic optical underwater attenuation (mild so ship details remain vividly visible)
+        # Apply optical underwater attenuation
         obs_degraded = apply_underwater_degradation(
             obs_clean,
             turbidity=self.turbidity,
             red_attenuation=self.red_attenuation,
             contrast_factor=self.contrast_factor,
-            marine_snow_density=0.0008
+            marine_snow_density=0.0008,
+            random_seed=self.frame_count
         )
 
         return {
@@ -177,7 +284,9 @@ class SimulatedUnderwaterCamera:
             "clean_image": obs_clean,
             "footprint_bounds": [x_min, x_max, y_min, y_max],
             "footprint_dimensions_m": [footprint_w, footprint_h],
-            "ground_truth_defect": gt_defect,
+            "ground_truth_defect": bool(gt_defect),
+            "ground_truth_mask": gt_mask,
+            "ground_truth_defect_frac": round(gt_frac, 4),
             "defect_metadata": intersecting_defect,
             "dataset_source": image_source,
             "camera_image_id": image_id,
@@ -268,16 +377,16 @@ class SimulatedUnderwaterCamera:
 
         # 4. AI Vision Overlay
         if ml_result is not None:
-            if ml_result.get("bounding_boxes"):
+            if ml_result.get("defect_detected") and ml_result.get("bounding_boxes"):
                 for b in ml_result["bounding_boxes"]:
                     x1, y1, x2, y2 = b["bbox_pixel"]
                     sx = w / ml_result["image_shape"][1]
                     sy = h / ml_result["image_shape"][0]
                     bx1, by1 = int(x1 * sx), int(y1 * sy)
                     bx2, by2 = int(x2 * sx), int(y2 * sy)
-                    cv2.rectangle(hud, (bx1, by1), (bx2, by2), (0, 60, 255), 2)
+                    cv2.rectangle(hud, (bx1, by1), (bx2, by2), (255, 0, 200), 2)
                     label = f"{b['defect_type'].upper()} ({ml_result['confidence_score']*100:.0f}%)"
-                    cv2.putText(hud, label, (bx1, max(45, by1 - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 60, 255), 1)
+                    cv2.putText(hud, label, (bx1, max(45, by1 - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 0, 200), 1)
 
             det_label = ml_result.get("predicted_defect_class", "sound_hull").replace("_", " ").upper()
             status_text = f"AI VISION: {det_label} | CONF: {ml_result['confidence_score']*100:.1f}% | STATUS: {ml_result['status'].upper()}"

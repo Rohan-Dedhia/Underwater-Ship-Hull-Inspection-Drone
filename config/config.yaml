@@ -19,24 +19,35 @@ paths:
 dataset:
   primary: "mavecodd"
   secondary: "underwater_crack"
-  train_split: 0.70
-  val_split: 0.15
-  test_split: 0.15
+  # 60/20/20 instead of 70/15/15: with only ~21 scene groups, 15% would leave
+  # a single group per tier in val/test, making the reported metrics unreliable.
+  train_split: 0.60
+  val_split: 0.20
+  test_split: 0.20
   image_size: [256, 256]
   sample_count: 50
   leakage_prevention: true
+  # Consecutive frame numbers are near-duplicates (video / burst photos), so they
+  # are grouped into blocks of this many frame IDs and never split across partitions.
+  scene_block_size: 5
+  # Patch-level task shared by BOTH models (fair comparison):
+  # image rescaled to this long side, then tiled into patch_size x patch_size tiles.
+  patch_long_side: 1024
+  patch_size: 256
+  patch_defect_min_frac: 0.05   # tile is "defect" if >= 5% of its pixels are corrosion
+  patch_sound_max_frac: 0.005   # tile is "sound" if <= 0.5%; tiles in between are ambiguous and skipped
 
 baseline_model:
-  feature_extractor: "hog_color"
-  hog_orientations: 9
-  hog_pixels_per_cell: [16, 16]
-  hog_cells_per_block: [2, 2]
-  color_bins: 16
-  pca_enabled: true
-  pca_components: 64
+  # Model A: 47 handcrafted features (Lab colour relative to the whole image, LBP texture,
+  # gradient statistics) -> StandardScaler -> RBF-SVM. See extract_handcrafted_features().
+  feature_extractor: "relcolor_lbp_grad"
   svm_kernel: "rbf"
-  svm_c: 10.0
   svm_gamma: "scale"
+  # Hyperparameters are chosen by scene-grouped cross-validation on the training split
+  # (one-standard-error rule -> the simplest model whose CV score is within 1 SE of the best).
+  cv_folds: 5
+  cv_svm_c: [0.03, 0.1, 0.3, 1.0, 3.0, 10.0]
+  cv_pca_components: [null, 8, 16]   # null = no PCA
 
 cnn_model:
   architecture: "unet"
@@ -44,12 +55,17 @@ cnn_model:
   in_channels: 3
   out_channels: 1
   image_size: [256, 256]
+  base_channels: 16          # ~2M params; smaller net = less capacity to memorise ~45 training images
+  work_long_side: 512        # images are resized (aspect kept) so the long side is 512 px
+  crop_size: 256             # random training crops taken from the 512 px image
+  crops_per_image: 3         # random crops sampled per training image per epoch
+  scale_aug: [0.8, 1.6]      # random zoom so the model also handles the closer ROV camera view
   batch_size: 8
-  epochs: 15
+  epochs: 40
   learning_rate: 0.001
   weight_decay: 0.0001
   device: "auto"
-  early_stopping_patience: 5
+  early_stopping_patience: 8
   checkpoint_name: "best_unet_model.pth"
 
 simulation:

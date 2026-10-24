@@ -22,6 +22,7 @@ htmlcov/
 *.pt
 *.pth
 *.onnx
+!models/checkpoints/*.pth
 
 # Data & Large Archives (keep sample data, track raw zip in docs)
 data/raw/mavecodd/
@@ -30,7 +31,7 @@ data/processed/
 *.zip
 
 # Streamlit
-.streamlit/
+.streamlit/secrets.toml
 
 # OS specific
 .DS_Store

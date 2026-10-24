@@ -17,15 +17,18 @@ from src.storage.parquet_reader import (
     export_inspection_to_csv
 )
 from src.reporting.report_generator import generate_pdf_inspection_report, generate_markdown_inspection_report
+from app.ui import inject_css, callout, page_header
 
-st.title("📄 Inspection Reports & PyArrow Telemetry Logs")
-st.markdown("Query, filter, and export structured Apache Parquet inspection records and formal PDF engineering reports.")
+inject_css()
+
+page_header("📄 Inspection reports", "Query logged simulation missions (Apache Parquet) and export them as CSV or a PDF survey report.")
 
 logs_dir = ROOT / "outputs" / "inspection_logs"
 inspections = list_available_inspections(logs_dir)
 
 if not inspections:
-    st.info("No inspection missions logged yet. Go to **Page 3 (Drone Simulation)** and click 'Save Parquet Log' or run `python scripts/run_simulation.py`.")
+    callout("No inspection missions logged yet. Go to <b>Drone Simulation</b> and click 'Save Parquet Log' "
+            "or run <b>python scripts/run_simulation.py</b>.")
     st.stop()
 
 # Select inspection
@@ -45,6 +48,18 @@ c2.metric("Final Coverage", f"{summary['final_coverage_pct']:.1f}%")
 c3.metric("Suspected Defects", summary["total_suspected_defects"])
 c4.metric("Mean Confidence", f"{summary['mean_confidence']*100:.1f}%")
 
+if "ground_truth_defect" in df and df["predicted_defect_class"].ne("unprocessed").any():
+    gt, pr = df["ground_truth_defect"].astype(bool), df["defect_detected"].astype(bool)
+    tp, fp = int((gt & pr).sum()), int((~gt & pr).sum())
+    fn, tn = int((gt & ~pr).sum()), int((~gt & ~pr).sum())
+    g1, g2, g3, g4 = st.columns(4)
+    g1.metric("Frames correct vs ground truth", f"{(tp + tn) / len(df) * 100:.1f}%")
+    g2.metric("Defect frames caught", f"{tp} / {tp + fn}")
+    g3.metric("False alarms", f"{fp} / {fp + tn}")
+    g4.metric("Missed defect frames", fn)
+    st.caption("Ground truth is stored per frame in the log (column ground_truth_defect). Logs recorded before the "
+               "simulation fix used frames without real ground truth and score poorly here.")
+
 st.write("---")
 
 # Download Buttons row
@@ -59,7 +74,7 @@ with col_d1:
         data=parquet_bytes,
         file_name=parquet_path.name,
         mime="application/octet-stream",
-        use_container_width=True
+        width="stretch"
     )
 
 # 2. CSV Download
@@ -71,7 +86,7 @@ with col_d2:
         data=csv_buffer.getvalue(),
         file_name=f"{parquet_path.stem}.csv",
         mime="text/csv",
-        use_container_width=True
+        width="stretch"
     )
 
 # 3. PDF Report Generation & Download
@@ -86,7 +101,7 @@ with col_d3:
         data=pdf_bytes,
         file_name=pdf_path.name,
         mime="application/pdf",
-        use_container_width=True
+        width="stretch"
     )
 
 st.write("---")
@@ -119,15 +134,13 @@ display_cols = [
     "defect_detected", "defect_x_min", "defect_y_min", "defect_x_max", "defect_y_max",
     "inspection_status", "coverage_pct"
 ]
-st.dataframe(filtered_df[display_cols], use_container_width=True)
+st.dataframe(filtered_df[display_cols], width="stretch")
 
 st.write("---")
 st.subheader("⚠️ Scientific & Legal Disclaimers")
-st.markdown("""
-<div style="background-color: #fff3cd; border: 1px solid #ffeeba; padding: 15px; border-radius: 6px; font-size: 0.9rem; color: #856404;">
-    <b>1. Optical Surface NDT Scope:</b> Visual machine learning models detect surface discoloration, rust scale, and fissure cracks visible to the RGB sensor. 
-    They cannot evaluate plate thinning, internal corrosion pitting, or subsurface metal fatigue without complementary ultrasonic thickness testing.<br/>
-    <b>2. Terminology Standard:</b> In accordance with DNV / Lloyd's Register NDT guidelines, all detections are cataloged as <i>'suspected defects'</i> with status <i>'requires further inspection'</i>.<br/>
-    <b>3. Model Confidence:</b> Statistical confidence scores reflect feature alignment, not calibrated structural safety factors. Certified naval architect review is mandatory before dry-dock weld scheduling.
-</div>
-""", unsafe_allow_html=True)
+callout("""
+<b>1. Optical Surface NDT Scope:</b> Visual machine learning models detect surface discoloration, rust scale, and fissure cracks visible to the RGB sensor.
+They cannot evaluate plate thinning, internal corrosion pitting, or subsurface metal fatigue without complementary ultrasonic thickness testing.<br/>
+<b>2. Terminology Standard:</b> In accordance with DNV / Lloyd's Register NDT guidelines, all detections are cataloged as <i>'suspected defects'</i> with status <i>'requires further inspection'</i>.<br/>
+<b>3. Model Confidence:</b> Confidence scores reflect model output, not calibrated structural safety factors. Certified naval architect review is mandatory before dry-dock weld scheduling.
+""", "warn")

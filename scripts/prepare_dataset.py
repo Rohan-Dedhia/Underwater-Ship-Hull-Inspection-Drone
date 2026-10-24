@@ -37,8 +37,10 @@ def main():
         with zipfile.ZipFile(zip_mav, "r") as z:
             z.extractall(raw_mav_dir)
         print("Extracted MaVeCoDD dataset.")
+    elif (raw_mav_dir / "HiRes").exists():
+        print(f"MaVeCoDD dataset found at: {raw_mav_dir}")
     else:
-        print(f"MaVeCoDD dataset ready at: {raw_mav_dir}")
+        print(f"MaVeCoDD dataset NOT found (expected {zip_mav.name} in repo root or files in {raw_mav_dir}).")
 
     raw_crack_dir = ROOT / cfg_paths["raw_underwater_crack"]
     zip_crack = ROOT / cfg_paths["zip_underwater_crack"]
@@ -48,8 +50,10 @@ def main():
         with zipfile.ZipFile(zip_crack, "r") as z:
             z.extractall(raw_crack_dir)
         print("Extracted Underwater Crack dataset.")
+    elif (raw_crack_dir / "images").exists():
+        print(f"Underwater Crack dataset found at: {raw_crack_dir}")
     else:
-        print(f"Underwater Crack dataset ready at: {raw_crack_dir}")
+        print(f"Underwater Crack dataset NOT found (expected {zip_crack.name} in repo root).")
 
     # 2. Generate Synthetic Sample Dataset (Quick-start mode)
     sample_dir = ROOT / cfg_paths["sample_dir"]
@@ -67,7 +71,10 @@ def main():
     processed_dir.mkdir(parents=True, exist_ok=True)
 
     # 3a. MaVeCoDD splits
-    mav_samples = scan_mavecodd_samples(raw_mav_dir, zip_fallback=zip_mav)
+    mav_samples = scan_mavecodd_samples(
+        raw_mav_dir, zip_fallback=zip_mav,
+        scene_block_size=config["dataset"].get("scene_block_size", 5)
+    )
     if mav_samples:
         mav_splits = create_leakage_free_splits(
             mav_samples,
@@ -75,10 +82,13 @@ def main():
             val_ratio=config["dataset"]["val_split"],
             test_ratio=config["dataset"]["test_split"],
             group_key="scene_id",
-            random_seed=config.get("random_seed", 42)
+            random_seed=config.get("random_seed", 42),
+            stratify_key="resolution_tier"
         )
         save_split_manifest(mav_splits, processed_dir / "split_manifest_mavecodd.json")
-        print(f"MaVeCoDD Splits -> Train: {len(mav_splits['train'])}, Val: {len(mav_splits['val'])}, Test: {len(mav_splits['test'])}")
+        for name, items in mav_splits.items():
+            groups = sorted({s["scene_id"] for s in items})
+            print(f"MaVeCoDD {name:5s}: {len(items):2d} images in {len(groups)} scene groups -> {', '.join(groups)}")
 
     # 3b. Underwater Crack splits
     crack_samples = scan_crack_samples(raw_crack_dir, zip_fallback=zip_crack)

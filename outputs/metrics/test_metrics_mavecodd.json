@@ -1,88 +1,1169 @@
 {
   "dataset": "mavecodd",
-  "baseline_model_a": {
-    "model_name": "Model A (HOG+Color+PCA+SVM)",
-    "accuracy": 0.8197,
-    "precision": 0.8788,
-    "recall": 0.8056,
-    "f1_score": 0.8406,
-    "roc_auc": 0.8711,
-    "confusion_matrix": {
-      "TN": 21,
-      "FP": 4,
-      "FN": 7,
-      "TP": 29
+  "evaluation_protocol": {
+    "split_sizes": {
+      "train": 44,
+      "val": 16,
+      "test": 16
     },
-    "false_negatives": 7,
-    "false_positives": 4,
-    "test_samples": 61,
-    "latency_ms_per_image": 13.18
+    "split_scene_groups": {
+      "train": [
+        "HiRes_seq000",
+        "HiRes_seq002",
+        "HiRes_seq003",
+        "HiRes_seq005",
+        "HiRes_seq006",
+        "HiRes_seq007",
+        "HiRes_seq010",
+        "LoRes_seq202",
+        "LoRes_seq204",
+        "LoRes_seq205",
+        "LoRes_seq206",
+        "LoRes_seq207",
+        "LoRes_seq209",
+        "LoRes_seq210"
+      ],
+      "val": [
+        "HiRes_seq004",
+        "HiRes_seq009",
+        "LoRes_seq203",
+        "LoRes_seq208"
+      ],
+      "test": [
+        "HiRes_seq001",
+        "HiRes_seq008",
+        "LoRes_seq200",
+        "LoRes_seq201"
+      ]
+    },
+    "patch_config": {
+      "long_side": 1024,
+      "patch_size": 256,
+      "defect_min_frac": 0.05,
+      "sound_max_frac": 0.005
+    },
+    "unet_mask_threshold": 0.5,
+    "unet_detection_area_threshold": 0.08,
+    "thresholds_chosen_on": "validation split"
+  },
+  "baseline_model_a": {
+    "train": {
+      "accuracy": 0.8768,
+      "balanced_accuracy": 0.9092,
+      "precision": 0.9892,
+      "recall": 0.854,
+      "f1_score": 0.9167,
+      "roc_auc": 0.9684,
+      "confusion_matrix": {
+        "TN": 81,
+        "FP": 3,
+        "FN": 47,
+        "TP": 275
+      },
+      "false_negatives": 47,
+      "false_positives": 3,
+      "n_patches": 406,
+      "n_defect_patches": 322,
+      "n_sound_patches": 84,
+      "balanced_accuracy_ci95": [
+        0.8714,
+        0.9405
+      ],
+      "model_name": "Model A (colour/texture features + SVM)",
+      "latency_ms_per_patch": 37.01
+    },
+    "val": {
+      "accuracy": 0.85,
+      "balanced_accuracy": 0.9062,
+      "precision": 1.0,
+      "recall": 0.8125,
+      "f1_score": 0.8966,
+      "roc_auc": 0.9629,
+      "confusion_matrix": {
+        "TN": 32,
+        "FP": 0,
+        "FN": 24,
+        "TP": 104
+      },
+      "false_negatives": 24,
+      "false_positives": 0,
+      "n_patches": 160,
+      "n_defect_patches": 128,
+      "n_sound_patches": 32,
+      "balanced_accuracy_ci95": [
+        0.8372,
+        0.9648
+      ],
+      "model_name": "Model A (colour/texture features + SVM)",
+      "latency_ms_per_patch": 34.7
+    },
+    "test": {
+      "accuracy": 0.7091,
+      "balanced_accuracy": 0.7316,
+      "precision": 0.9528,
+      "recall": 0.7014,
+      "f1_score": 0.808,
+      "roc_auc": 0.8148,
+      "confusion_matrix": {
+        "TN": 16,
+        "FP": 5,
+        "FN": 43,
+        "TP": 101
+      },
+      "false_negatives": 43,
+      "false_positives": 5,
+      "n_patches": 165,
+      "n_defect_patches": 144,
+      "n_sound_patches": 21,
+      "balanced_accuracy_ci95": [
+        0.5814,
+        0.8589
+      ],
+      "model_name": "Model A (colour/texture features + SVM)",
+      "latency_ms_per_patch": 35.09
+    }
   },
   "deep_learning_model_b": {
-    "model_name": "Model B (U-Net CNN)",
-    "mean_iou": 0.3833,
-    "mean_dice": 0.498,
-    "mean_pixel_accuracy": 0.7806,
-    "pixel_precision": 0.4146,
-    "pixel_recall": 0.7755,
-    "classification_accuracy": 1.0,
-    "classification_precision": 1.0,
-    "classification_recall": 1.0,
-    "classification_f1": 1.0,
-    "roc_auc": "N/A",
-    "confusion_matrix": {
-      "TN": 0,
-      "FP": 0,
-      "FN": 0,
-      "TP": 12
+    "train": {
+      "model_name": "Model B (U-Net CNN)",
+      "n_images": 44,
+      "mean_iou": 0.5247,
+      "mean_dice": 0.6369,
+      "mean_dice_ci95": [
+        0.5547,
+        0.7117
+      ],
+      "mean_pixel_accuracy": 0.8914,
+      "pixel_precision": 0.5851,
+      "pixel_recall": 0.8147,
+      "patch_classification": {
+        "accuracy": 0.9261,
+        "balanced_accuracy": 0.905,
+        "precision": 0.965,
+        "recall": 0.941,
+        "f1_score": 0.9528,
+        "roc_auc": 0.9625,
+        "confusion_matrix": {
+          "TN": 73,
+          "FP": 11,
+          "FN": 19,
+          "TP": 303
+        },
+        "false_negatives": 19,
+        "false_positives": 11,
+        "n_patches": 406,
+        "n_defect_patches": 322,
+        "n_sound_patches": 84,
+        "balanced_accuracy_ci95": [
+          0.8454,
+          0.9529
+        ]
+      },
+      "per_image": [
+        {
+          "image_id": "mavecodd_HiRes_hull030",
+          "scene_id": "HiRes_seq006",
+          "true_defect_area": 0.0683,
+          "pred_defect_area": 0.1073,
+          "iou": 0.5146,
+          "dice": 0.6795,
+          "pixel_accuracy": 0.9437,
+          "precision": 0.556,
+          "recall": 0.8736
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull038",
+          "scene_id": "HiRes_seq007",
+          "true_defect_area": 0.4734,
+          "pred_defect_area": 0.4903,
+          "iou": 0.7739,
+          "dice": 0.8726,
+          "pixel_accuracy": 0.8772,
+          "precision": 0.8575,
+          "recall": 0.8882
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull039",
+          "scene_id": "HiRes_seq007",
+          "true_defect_area": 0.4912,
+          "pred_defect_area": 0.521,
+          "iou": 0.7652,
+          "dice": 0.867,
+          "pixel_accuracy": 0.8654,
+          "precision": 0.8422,
+          "recall": 0.8933
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull001",
+          "scene_id": "HiRes_seq000",
+          "true_defect_area": 0.0434,
+          "pred_defect_area": 0.0911,
+          "iou": 0.402,
+          "dice": 0.5735,
+          "pixel_accuracy": 0.9426,
+          "precision": 0.4234,
+          "recall": 0.8885
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull002",
+          "scene_id": "HiRes_seq000",
+          "true_defect_area": 0.0273,
+          "pred_defect_area": 0.0452,
+          "iou": 0.3658,
+          "dice": 0.5357,
+          "pixel_accuracy": 0.9663,
+          "precision": 0.4295,
+          "recall": 0.7115
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull003",
+          "scene_id": "HiRes_seq000",
+          "true_defect_area": 0.0082,
+          "pred_defect_area": 0.0461,
+          "iou": 0.1386,
+          "dice": 0.2434,
+          "pixel_accuracy": 0.9589,
+          "precision": 0.1434,
+          "recall": 0.8046
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull053",
+          "scene_id": "HiRes_seq010",
+          "true_defect_area": 0.1709,
+          "pred_defect_area": 0.2,
+          "iou": 0.2162,
+          "dice": 0.3555,
+          "pixel_accuracy": 0.761,
+          "precision": 0.3296,
+          "recall": 0.3858
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull054",
+          "scene_id": "HiRes_seq010",
+          "true_defect_area": 0.4409,
+          "pred_defect_area": 0.5637,
+          "iou": 0.497,
+          "dice": 0.664,
+          "pixel_accuracy": 0.6624,
+          "precision": 0.5916,
+          "recall": 0.7565
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull015",
+          "scene_id": "HiRes_seq003",
+          "true_defect_area": 0.0233,
+          "pred_defect_area": 0.1199,
+          "iou": 0.1383,
+          "dice": 0.2429,
+          "pixel_accuracy": 0.8916,
+          "precision": 0.1451,
+          "recall": 0.7467
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull016",
+          "scene_id": "HiRes_seq003",
+          "true_defect_area": 0.0262,
+          "pred_defect_area": 0.1159,
+          "iou": 0.1267,
+          "dice": 0.2249,
+          "pixel_accuracy": 0.8899,
+          "precision": 0.1378,
+          "recall": 0.6103
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull017",
+          "scene_id": "HiRes_seq003",
+          "true_defect_area": 0.0296,
+          "pred_defect_area": 0.0486,
+          "iou": 0.3084,
+          "dice": 0.4714,
+          "pixel_accuracy": 0.9587,
+          "precision": 0.3792,
+          "recall": 0.6227
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull018",
+          "scene_id": "HiRes_seq003",
+          "true_defect_area": 0.0203,
+          "pred_defect_area": 0.0555,
+          "iou": 0.2331,
+          "dice": 0.3781,
+          "pixel_accuracy": 0.9528,
+          "precision": 0.2583,
+          "recall": 0.7056
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull019",
+          "scene_id": "HiRes_seq003",
+          "true_defect_area": 0.0144,
+          "pred_defect_area": 0.033,
+          "iou": 0.2872,
+          "dice": 0.4463,
+          "pixel_accuracy": 0.9737,
+          "precision": 0.3202,
+          "recall": 0.7361
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull025",
+          "scene_id": "HiRes_seq005",
+          "true_defect_area": 0.0399,
+          "pred_defect_area": 0.0941,
+          "iou": 0.3268,
+          "dice": 0.4926,
+          "pixel_accuracy": 0.932,
+          "precision": 0.3508,
+          "recall": 0.8268
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull026",
+          "scene_id": "HiRes_seq005",
+          "true_defect_area": 0.0071,
+          "pred_defect_area": 0.1464,
+          "iou": 0.0244,
+          "dice": 0.0477,
+          "pixel_accuracy": 0.8538,
+          "precision": 0.025,
+          "recall": 0.5153
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull027",
+          "scene_id": "HiRes_seq005",
+          "true_defect_area": 0.0096,
+          "pred_defect_area": 0.1019,
+          "iou": 0.0597,
+          "dice": 0.1126,
+          "pixel_accuracy": 0.9011,
+          "precision": 0.0616,
+          "recall": 0.6551
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull029",
+          "scene_id": "HiRes_seq005",
+          "true_defect_area": 0.0292,
+          "pred_defect_area": 0.0979,
+          "iou": 0.2488,
+          "dice": 0.3985,
+          "pixel_accuracy": 0.9235,
+          "precision": 0.2587,
+          "recall": 0.8665
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull010",
+          "scene_id": "HiRes_seq002",
+          "true_defect_area": 0.0223,
+          "pred_defect_area": 0.1012,
+          "iou": 0.1526,
+          "dice": 0.2648,
+          "pixel_accuracy": 0.9092,
+          "precision": 0.1616,
+          "recall": 0.7331
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull011",
+          "scene_id": "HiRes_seq002",
+          "true_defect_area": 0.0096,
+          "pred_defect_area": 0.0386,
+          "iou": 0.2015,
+          "dice": 0.3354,
+          "pixel_accuracy": 0.968,
+          "precision": 0.2094,
+          "recall": 0.8415
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull013",
+          "scene_id": "HiRes_seq002",
+          "true_defect_area": 0.0152,
+          "pred_defect_area": 0.144,
+          "iou": 0.0842,
+          "dice": 0.1553,
+          "pixel_accuracy": 0.8656,
+          "precision": 0.0858,
+          "recall": 0.8153
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull014",
+          "scene_id": "HiRes_seq002",
+          "true_defect_area": 0.0112,
+          "pred_defect_area": 0.0729,
+          "iou": 0.1113,
+          "dice": 0.2004,
+          "pixel_accuracy": 0.9328,
+          "precision": 0.1155,
+          "recall": 0.7548
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1020",
+          "scene_id": "LoRes_seq204",
+          "true_defect_area": 0.284,
+          "pred_defect_area": 0.221,
+          "iou": 0.4641,
+          "dice": 0.634,
+          "pixel_accuracy": 0.8152,
+          "precision": 0.7245,
+          "recall": 0.5636
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1021",
+          "scene_id": "LoRes_seq204",
+          "true_defect_area": 0.445,
+          "pred_defect_area": 0.2764,
+          "iou": 0.5367,
+          "dice": 0.6985,
+          "pixel_accuracy": 0.7825,
+          "precision": 0.9117,
+          "recall": 0.5662
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1022",
+          "scene_id": "LoRes_seq204",
+          "true_defect_area": 0.7649,
+          "pred_defect_area": 0.8218,
+          "iou": 0.8925,
+          "dice": 0.9432,
+          "pixel_accuracy": 0.9099,
+          "precision": 0.9105,
+          "recall": 0.9783
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1023",
+          "scene_id": "LoRes_seq204",
+          "true_defect_area": 0.7841,
+          "pred_defect_area": 0.7659,
+          "iou": 0.9418,
+          "dice": 0.97,
+          "pixel_accuracy": 0.9536,
+          "precision": 0.9816,
+          "recall": 0.9588
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1024",
+          "scene_id": "LoRes_seq204",
+          "true_defect_area": 0.5505,
+          "pred_defect_area": 0.5512,
+          "iou": 0.9141,
+          "dice": 0.9551,
+          "pixel_accuracy": 0.9506,
+          "precision": 0.9546,
+          "recall": 0.9557
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1045",
+          "scene_id": "LoRes_seq209",
+          "true_defect_area": 0.4826,
+          "pred_defect_area": 0.6538,
+          "iou": 0.7201,
+          "dice": 0.8373,
+          "pixel_accuracy": 0.8151,
+          "precision": 0.7277,
+          "recall": 0.9859
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1010",
+          "scene_id": "LoRes_seq202",
+          "true_defect_area": 0.3115,
+          "pred_defect_area": 0.3068,
+          "iou": 0.715,
+          "dice": 0.8338,
+          "pixel_accuracy": 0.8973,
+          "precision": 0.8402,
+          "recall": 0.8275
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1011",
+          "scene_id": "LoRes_seq202",
+          "true_defect_area": 0.2981,
+          "pred_defect_area": 0.3676,
+          "iou": 0.6337,
+          "dice": 0.7758,
+          "pixel_accuracy": 0.8507,
+          "precision": 0.7024,
+          "recall": 0.8662
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1012",
+          "scene_id": "LoRes_seq202",
+          "true_defect_area": 0.222,
+          "pred_defect_area": 0.244,
+          "iou": 0.5729,
+          "dice": 0.7285,
+          "pixel_accuracy": 0.8735,
+          "precision": 0.6956,
+          "recall": 0.7646
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1013",
+          "scene_id": "LoRes_seq202",
+          "true_defect_area": 0.1766,
+          "pred_defect_area": 0.195,
+          "iou": 0.6482,
+          "dice": 0.7866,
+          "pixel_accuracy": 0.9207,
+          "precision": 0.7494,
+          "recall": 0.8277
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1014",
+          "scene_id": "LoRes_seq202",
+          "true_defect_area": 0.3314,
+          "pred_defect_area": 0.4104,
+          "iou": 0.595,
+          "dice": 0.7461,
+          "pixel_accuracy": 0.8116,
+          "precision": 0.6743,
+          "recall": 0.835
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1037",
+          "scene_id": "LoRes_seq207",
+          "true_defect_area": 0.5488,
+          "pred_defect_area": 0.5881,
+          "iou": 0.8635,
+          "dice": 0.9268,
+          "pixel_accuracy": 0.9168,
+          "precision": 0.8957,
+          "recall": 0.96
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1038",
+          "scene_id": "LoRes_seq207",
+          "true_defect_area": 0.4708,
+          "pred_defect_area": 0.5788,
+          "iou": 0.7718,
+          "dice": 0.8712,
+          "pixel_accuracy": 0.8648,
+          "precision": 0.7899,
+          "recall": 0.9711
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1039",
+          "scene_id": "LoRes_seq207",
+          "true_defect_area": 0.3711,
+          "pred_defect_area": 0.6051,
+          "iou": 0.5942,
+          "dice": 0.7455,
+          "pixel_accuracy": 0.7515,
+          "precision": 0.6013,
+          "recall": 0.9805
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1025",
+          "scene_id": "LoRes_seq205",
+          "true_defect_area": 0.3047,
+          "pred_defect_area": 0.307,
+          "iou": 0.8644,
+          "dice": 0.9273,
+          "pixel_accuracy": 0.9555,
+          "precision": 0.9238,
+          "recall": 0.9307
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1026",
+          "scene_id": "LoRes_seq205",
+          "true_defect_area": 0.1482,
+          "pred_defect_area": 0.1342,
+          "iou": 0.8551,
+          "dice": 0.9219,
+          "pixel_accuracy": 0.9779,
+          "precision": 0.9697,
+          "recall": 0.8785
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1027",
+          "scene_id": "LoRes_seq205",
+          "true_defect_area": 0.2491,
+          "pred_defect_area": 0.2418,
+          "iou": 0.739,
+          "dice": 0.8499,
+          "pixel_accuracy": 0.9263,
+          "precision": 0.8627,
+          "recall": 0.8374
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1028",
+          "scene_id": "LoRes_seq205",
+          "true_defect_area": 0.2363,
+          "pred_defect_area": 0.2628,
+          "iou": 0.8241,
+          "dice": 0.9036,
+          "pixel_accuracy": 0.9519,
+          "precision": 0.8579,
+          "recall": 0.9543
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1029",
+          "scene_id": "LoRes_seq205",
+          "true_defect_area": 0.466,
+          "pred_defect_area": 0.4929,
+          "iou": 0.8593,
+          "dice": 0.9243,
+          "pixel_accuracy": 0.9274,
+          "precision": 0.8991,
+          "recall": 0.951
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1050",
+          "scene_id": "LoRes_seq210",
+          "true_defect_area": 0.3427,
+          "pred_defect_area": 0.3321,
+          "iou": 0.7753,
+          "dice": 0.8734,
+          "pixel_accuracy": 0.9146,
+          "precision": 0.8873,
+          "recall": 0.86
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1051",
+          "scene_id": "LoRes_seq210",
+          "true_defect_area": 0.5228,
+          "pred_defect_area": 0.4905,
+          "iou": 0.8231,
+          "dice": 0.903,
+          "pixel_accuracy": 0.9017,
+          "precision": 0.9326,
+          "recall": 0.8751
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1030",
+          "scene_id": "LoRes_seq206",
+          "true_defect_area": 0.4469,
+          "pred_defect_area": 0.4748,
+          "iou": 0.8841,
+          "dice": 0.9385,
+          "pixel_accuracy": 0.9433,
+          "precision": 0.9109,
+          "recall": 0.9678
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1033",
+          "scene_id": "LoRes_seq206",
+          "true_defect_area": 0.5691,
+          "pred_defect_area": 0.7939,
+          "iou": 0.6207,
+          "dice": 0.766,
+          "pixel_accuracy": 0.6811,
+          "precision": 0.6576,
+          "recall": 0.9173
+        }
+      ],
+      "latency_ms_per_image": 469.43
     },
-    "false_negatives": 0,
-    "false_positives": 0,
-    "latency_ms_per_image": 121.15,
-    "test_samples": 12
+    "val": {
+      "model_name": "Model B (U-Net CNN)",
+      "n_images": 16,
+      "mean_iou": 0.5084,
+      "mean_dice": 0.6329,
+      "mean_dice_ci95": [
+        0.5075,
+        0.7495
+      ],
+      "mean_pixel_accuracy": 0.8602,
+      "pixel_precision": 0.5879,
+      "pixel_recall": 0.8312,
+      "patch_classification": {
+        "accuracy": 0.9375,
+        "balanced_accuracy": 0.9375,
+        "precision": 0.9836,
+        "recall": 0.9375,
+        "f1_score": 0.96,
+        "roc_auc": 0.9856,
+        "confusion_matrix": {
+          "TN": 30,
+          "FP": 2,
+          "FN": 8,
+          "TP": 120
+        },
+        "false_negatives": 8,
+        "false_positives": 2,
+        "n_patches": 160,
+        "n_defect_patches": 128,
+        "n_sound_patches": 32,
+        "balanced_accuracy_ci95": [
+          0.8968,
+          0.9767
+        ]
+      },
+      "per_image": [
+        {
+          "image_id": "mavecodd_HiRes_hull020",
+          "scene_id": "HiRes_seq004",
+          "true_defect_area": 0.0188,
+          "pred_defect_area": 0.0375,
+          "iou": 0.2783,
+          "dice": 0.4354,
+          "pixel_accuracy": 0.9682,
+          "precision": 0.3266,
+          "recall": 0.6533
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull021",
+          "scene_id": "HiRes_seq004",
+          "true_defect_area": 0.0411,
+          "pred_defect_area": 0.1394,
+          "iou": 0.2746,
+          "dice": 0.4309,
+          "pixel_accuracy": 0.8973,
+          "precision": 0.2789,
+          "recall": 0.9466
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull022",
+          "scene_id": "HiRes_seq004",
+          "true_defect_area": 0.01,
+          "pred_defect_area": 0.0622,
+          "iou": 0.1236,
+          "dice": 0.2201,
+          "pixel_accuracy": 0.9437,
+          "precision": 0.1278,
+          "recall": 0.7922
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull023",
+          "scene_id": "HiRes_seq004",
+          "true_defect_area": 0.0163,
+          "pred_defect_area": 0.1118,
+          "iou": 0.1098,
+          "dice": 0.1979,
+          "pixel_accuracy": 0.8973,
+          "precision": 0.1134,
+          "recall": 0.7773
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull024",
+          "scene_id": "HiRes_seq004",
+          "true_defect_area": 0.0173,
+          "pred_defect_area": 0.1014,
+          "iou": 0.1297,
+          "dice": 0.2297,
+          "pixel_accuracy": 0.9086,
+          "precision": 0.1344,
+          "recall": 0.7876
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull045",
+          "scene_id": "HiRes_seq009",
+          "true_defect_area": 0.4135,
+          "pred_defect_area": 0.3938,
+          "iou": 0.8419,
+          "dice": 0.9141,
+          "pixel_accuracy": 0.9307,
+          "precision": 0.937,
+          "recall": 0.8924
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull048",
+          "scene_id": "HiRes_seq009",
+          "true_defect_area": 0.3421,
+          "pred_defect_area": 0.2573,
+          "iou": 0.7164,
+          "dice": 0.8348,
+          "pixel_accuracy": 0.901,
+          "precision": 0.9724,
+          "recall": 0.7313
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull049",
+          "scene_id": "HiRes_seq009",
+          "true_defect_area": 0.2973,
+          "pred_defect_area": 0.2407,
+          "iou": 0.7615,
+          "dice": 0.8646,
+          "pixel_accuracy": 0.9272,
+          "precision": 0.9663,
+          "recall": 0.7822
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1040",
+          "scene_id": "LoRes_seq208",
+          "true_defect_area": 0.4234,
+          "pred_defect_area": 0.5014,
+          "iou": 0.8191,
+          "dice": 0.9005,
+          "pixel_accuracy": 0.908,
+          "precision": 0.8305,
+          "recall": 0.9835
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1041",
+          "scene_id": "LoRes_seq208",
+          "true_defect_area": 0.2045,
+          "pred_defect_area": 0.5239,
+          "iou": 0.3768,
+          "dice": 0.5473,
+          "pixel_accuracy": 0.6703,
+          "precision": 0.3805,
+          "recall": 0.9747
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1042",
+          "scene_id": "LoRes_seq208",
+          "true_defect_area": 0.3585,
+          "pred_defect_area": 0.516,
+          "iou": 0.6317,
+          "dice": 0.7743,
+          "pixel_accuracy": 0.8026,
+          "precision": 0.6561,
+          "recall": 0.9444
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1015",
+          "scene_id": "LoRes_seq203",
+          "true_defect_area": 0.3487,
+          "pred_defect_area": 0.6811,
+          "iou": 0.4569,
+          "dice": 0.6272,
+          "pixel_accuracy": 0.6161,
+          "precision": 0.4741,
+          "recall": 0.9262
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1016",
+          "scene_id": "LoRes_seq203",
+          "true_defect_area": 0.2116,
+          "pred_defect_area": 0.2354,
+          "iou": 0.6054,
+          "dice": 0.7542,
+          "pixel_accuracy": 0.8901,
+          "precision": 0.716,
+          "recall": 0.7968
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1017",
+          "scene_id": "LoRes_seq203",
+          "true_defect_area": 0.4167,
+          "pred_defect_area": 0.382,
+          "iou": 0.7597,
+          "dice": 0.8634,
+          "pixel_accuracy": 0.8909,
+          "precision": 0.9027,
+          "recall": 0.8275
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1018",
+          "scene_id": "LoRes_seq203",
+          "true_defect_area": 0.2948,
+          "pred_defect_area": 0.3015,
+          "iou": 0.5444,
+          "dice": 0.705,
+          "pixel_accuracy": 0.8241,
+          "precision": 0.6971,
+          "recall": 0.713
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1019",
+          "scene_id": "LoRes_seq203",
+          "true_defect_area": 0.6594,
+          "pred_defect_area": 0.5692,
+          "iou": 0.7045,
+          "dice": 0.8266,
+          "pixel_accuracy": 0.787,
+          "precision": 0.8921,
+          "recall": 0.7701
+        }
+      ],
+      "latency_ms_per_image": 321.72
+    },
+    "test": {
+      "model_name": "Model B (U-Net CNN)",
+      "n_images": 16,
+      "mean_iou": 0.5102,
+      "mean_dice": 0.6546,
+      "mean_dice_ci95": [
+        0.5674,
+        0.7379
+      ],
+      "mean_pixel_accuracy": 0.8279,
+      "pixel_precision": 0.5651,
+      "pixel_recall": 0.8626,
+      "patch_classification": {
+        "accuracy": 0.9273,
+        "balanced_accuracy": 0.7753,
+        "precision": 0.94,
+        "recall": 0.9792,
+        "f1_score": 0.9592,
+        "roc_auc": 0.7755,
+        "confusion_matrix": {
+          "TN": 12,
+          "FP": 9,
+          "FN": 3,
+          "TP": 141
+        },
+        "false_negatives": 3,
+        "false_positives": 9,
+        "n_patches": 165,
+        "n_defect_patches": 144,
+        "n_sound_patches": 21,
+        "balanced_accuracy_ci95": [
+          0.6399,
+          0.891
+        ]
+      },
+      "per_image": [
+        {
+          "image_id": "mavecodd_HiRes_hull005",
+          "scene_id": "HiRes_seq001",
+          "true_defect_area": 0.1152,
+          "pred_defect_area": 0.6525,
+          "iou": 0.1654,
+          "dice": 0.2838,
+          "pixel_accuracy": 0.4502,
+          "precision": 0.167,
+          "recall": 0.9458
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull006",
+          "scene_id": "HiRes_seq001",
+          "true_defect_area": 0.1294,
+          "pred_defect_area": 0.3111,
+          "iou": 0.3999,
+          "dice": 0.5713,
+          "pixel_accuracy": 0.8111,
+          "precision": 0.4044,
+          "recall": 0.9726
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull007",
+          "scene_id": "HiRes_seq001",
+          "true_defect_area": 0.0725,
+          "pred_defect_area": 0.1726,
+          "iou": 0.2963,
+          "dice": 0.4571,
+          "pixel_accuracy": 0.867,
+          "precision": 0.3245,
+          "recall": 0.773
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull008",
+          "scene_id": "HiRes_seq001",
+          "true_defect_area": 0.0706,
+          "pred_defect_area": 0.1593,
+          "iou": 0.3248,
+          "dice": 0.4904,
+          "pixel_accuracy": 0.8828,
+          "precision": 0.354,
+          "recall": 0.7979
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull009",
+          "scene_id": "HiRes_seq001",
+          "true_defect_area": 0.0283,
+          "pred_defect_area": 0.0833,
+          "iou": 0.2894,
+          "dice": 0.4489,
+          "pixel_accuracy": 0.9385,
+          "precision": 0.3008,
+          "recall": 0.8845
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull040",
+          "scene_id": "HiRes_seq008",
+          "true_defect_area": 0.4489,
+          "pred_defect_area": 0.4133,
+          "iou": 0.7688,
+          "dice": 0.8693,
+          "pixel_accuracy": 0.8873,
+          "precision": 0.9067,
+          "recall": 0.8348
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull041",
+          "scene_id": "HiRes_seq008",
+          "true_defect_area": 0.1746,
+          "pred_defect_area": 0.3788,
+          "iou": 0.3261,
+          "dice": 0.4919,
+          "pixel_accuracy": 0.7188,
+          "precision": 0.3593,
+          "recall": 0.7794
+        },
+        {
+          "image_id": "mavecodd_HiRes_hull043",
+          "scene_id": "HiRes_seq008",
+          "true_defect_area": 0.6248,
+          "pred_defect_area": 0.6227,
+          "iou": 0.6616,
+          "dice": 0.7963,
+          "pixel_accuracy": 0.7459,
+          "precision": 0.7977,
+          "recall": 0.795
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1002",
+          "scene_id": "LoRes_seq200",
+          "true_defect_area": 0.2164,
+          "pred_defect_area": 0.3135,
+          "iou": 0.628,
+          "dice": 0.7715,
+          "pixel_accuracy": 0.8789,
+          "precision": 0.6521,
+          "recall": 0.9445
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1003",
+          "scene_id": "LoRes_seq200",
+          "true_defect_area": 0.3095,
+          "pred_defect_area": 0.4876,
+          "iou": 0.5749,
+          "dice": 0.73,
+          "pixel_accuracy": 0.7848,
+          "precision": 0.5967,
+          "recall": 0.9401
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1004",
+          "scene_id": "LoRes_seq200",
+          "true_defect_area": 0.4364,
+          "pred_defect_area": 0.5794,
+          "iou": 0.7135,
+          "dice": 0.8328,
+          "pixel_accuracy": 0.8301,
+          "precision": 0.73,
+          "recall": 0.9692
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1005",
+          "scene_id": "LoRes_seq201",
+          "true_defect_area": 0.2404,
+          "pred_defect_area": 0.3482,
+          "iou": 0.5932,
+          "dice": 0.7447,
+          "pixel_accuracy": 0.8497,
+          "precision": 0.6293,
+          "recall": 0.9117
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1006",
+          "scene_id": "LoRes_seq201",
+          "true_defect_area": 0.0869,
+          "pred_defect_area": 0.1372,
+          "iou": 0.4606,
+          "dice": 0.6307,
+          "pixel_accuracy": 0.9173,
+          "precision": 0.515,
+          "recall": 0.8135
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1007",
+          "scene_id": "LoRes_seq201",
+          "true_defect_area": 0.1594,
+          "pred_defect_area": 0.1518,
+          "iou": 0.7773,
+          "dice": 0.8747,
+          "pixel_accuracy": 0.961,
+          "precision": 0.8967,
+          "recall": 0.8538
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1008",
+          "scene_id": "LoRes_seq201",
+          "true_defect_area": 0.2887,
+          "pred_defect_area": 0.2754,
+          "iou": 0.6791,
+          "dice": 0.8089,
+          "pixel_accuracy": 0.8922,
+          "precision": 0.8284,
+          "recall": 0.7902
+        },
+        {
+          "image_id": "mavecodd_LoRes_colorImage1009",
+          "scene_id": "LoRes_seq201",
+          "true_defect_area": 0.2164,
+          "pred_defect_area": 0.2976,
+          "iou": 0.5045,
+          "dice": 0.6706,
+          "pixel_accuracy": 0.8307,
+          "precision": 0.5792,
+          "recall": 0.7964
+        }
+      ],
+      "latency_ms_per_image": 310.87
+    }
+  },
+  "overfitting_check": {
+    "baseline_patch_balanced_accuracy": {
+      "train": 0.9092,
+      "val": 0.9062,
+      "test": 0.7316,
+      "gap": 0.0903,
+      "verdict": "Mild overfitting",
+      "test_ci95": [
+        0.5814,
+        0.8589
+      ],
+      "train_within_test_ci": false
+    },
+    "unet_patch_balanced_accuracy": {
+      "train": 0.905,
+      "val": 0.9375,
+      "test": 0.7753,
+      "gap": 0.0486,
+      "verdict": "No meaningful overfitting",
+      "test_ci95": [
+        0.6399,
+        0.891
+      ],
+      "train_within_test_ci": false
+    },
+    "unet_dice": {
+      "train": 0.6369,
+      "val": 0.6329,
+      "test": 0.6546,
+      "gap": -0.0069,
+      "verdict": "No meaningful overfitting",
+      "test_ci95": [
+        0.5674,
+        0.7379
+      ],
+      "train_within_test_ci": true
+    }
   },
   "optical_degradation_stress_test": [
     {
       "turbidity": 0.0,
       "condition": "Clear Water",
-      "mean_iou": 0.3217,
-      "mean_dice": 0.4468,
-      "mean_recall": 0.8505
+      "unet_mean_dice": 0.6545,
+      "unet_pixel_recall": 0.8627,
+      "unet_patch_balanced_accuracy": 0.7753,
+      "baseline_patch_balanced_accuracy": 0.7316
     },
     {
       "turbidity": 0.15,
       "condition": "Light Coastal",
-      "mean_iou": 0.3182,
-      "mean_dice": 0.4436,
-      "mean_recall": 0.8531
+      "unet_mean_dice": 0.5384,
+      "unet_pixel_recall": 0.919,
+      "unet_patch_balanced_accuracy": 0.7584,
+      "baseline_patch_balanced_accuracy": 0.7232
     },
     {
       "turbidity": 0.3,
       "condition": "Harbour Waters",
-      "mean_iou": 0.3125,
-      "mean_dice": 0.438,
-      "mean_recall": 0.8671
+      "unet_mean_dice": 0.5254,
+      "unet_pixel_recall": 0.9193,
+      "unet_patch_balanced_accuracy": 0.7108,
+      "baseline_patch_balanced_accuracy": 0.7059
     },
     {
       "turbidity": 0.45,
       "condition": "Turbid Estuarine",
-      "mean_iou": 0.301,
-      "mean_dice": 0.4262,
-      "mean_recall": 0.8768
+      "unet_mean_dice": 0.5097,
+      "unet_pixel_recall": 0.9289,
+      "unet_patch_balanced_accuracy": 0.7143,
+      "baseline_patch_balanced_accuracy": 0.62
     },
     {
       "turbidity": 0.6,
-      "condition": "Turbid Estuarine",
-      "mean_iou": 0.2907,
-      "mean_dice": 0.4141,
-      "mean_recall": 0.8878
+      "condition": "Heavy Turbidity",
+      "unet_mean_dice": 0.4908,
+      "unet_pixel_recall": 0.9424,
+      "unet_patch_balanced_accuracy": 0.6667,
+      "baseline_patch_balanced_accuracy": 0.6245
     }
   ],
   "cross_domain_generalization": {
     "source_dataset": "mavecodd",
     "target_dataset": "underwater_crack",
-    "cross_domain_iou": 0.0004,
-    "cross_domain_dice": 0.0009,
-    "cross_domain_accuracy": 0.44
+    "n_images": 40,
+    "cross_domain_iou": 0.0384,
+    "cross_domain_dice": 0.0662,
+    "cross_domain_pixel_recall": 0.3585
   }
 }

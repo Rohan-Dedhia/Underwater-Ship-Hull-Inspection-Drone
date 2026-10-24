@@ -3,6 +3,7 @@
 from typing import List, Dict, Any, Optional, Tuple, Callable
 import os
 import io
+import re
 import zipfile
 from pathlib import Path
 import numpy as np
@@ -14,79 +15,130 @@ from torch.utils.data import Dataset
 from src.data.annotation_parser import parse_mavecodd_mask, parse_crack_mask
 from src.data.preprocessing import (
     resize_image_and_mask,
+    resize_long_side,
+    pad_to_multiple,
+    to_normalized_tensor_array,
     apply_underwater_degradation,
     extract_handcrafted_features
 )
 
 
+def sequence_scene_id(stem: str, res_type: str, block_size: int = 5) -> str:
+    """Group consecutive frame numbers (near-duplicate video / burst frames) into one scene.
+
+    e.g. colorImage1002..1004 -> 'LoRes_seq200', hull005..hull009 -> 'HiRes_seq001'.
+    """
+    digits = re.findall(r"\d+", stem)
+    if not digits:
+        return f"{res_type}_{stem}"
+    return f"{res_type}_seq{int(digits[-1]) // block_size:03d}"
+
+
 class HullDefectDataset(Dataset):
-    """PyTorch Dataset for hull inspection images with binary segmentation masks."""
+    """PyTorch Dataset for hull inspection images with binary segmentation masks.
+
+    Images are decoded once and cached at a reduced resolution (decoding 12 MP JPEGs
+    every epoch would dominate CPU training time).
+
+    mode="train": each item is a random crop (random zoom, flips, 90-degree rotations,
+        colour jitter and optional underwater degradation). `crops_per_image` crops are
+        drawn per image per epoch, so the network never sees the exact same input twice.
+    mode="eval": each item is the whole image resized to `work_long_side` and padded to a
+        multiple of 16 (use batch_size=1 because image shapes differ).
+    """
 
     def __init__(
         self,
         samples: List[Dict[str, Any]],
-        image_size: Tuple[int, int] = (256, 256),
-        augment: bool = False,
+        mode: str = "eval",
+        work_long_side: int = 512,
+        crop_size: int = 256,
+        crops_per_image: int = 2,
+        scale_aug: Tuple[float, float] = (0.8, 1.6),
         degrade_prob: float = 0.0,
-        transform: Optional[Callable] = None,
         random_seed: int = 42
     ):
+        assert mode in ("train", "eval")
         self.samples = samples
-        self.image_size = image_size
-        self.augment = augment
+        self.mode = mode
+        self.work_long_side = work_long_side
+        self.crop_size = crop_size
+        self.crops_per_image = crops_per_image if mode == "train" else 1
+        self.scale_aug = scale_aug
         self.degrade_prob = degrade_prob
-        self.transform = transform
         self.rng = np.random.default_rng(random_seed)
 
+        cache_long_side = int(round(work_long_side * (max(scale_aug) if mode == "train" else 1.0)))
+        self.cache = []
+        for s in samples:
+            img, mask = load_image_and_mask(s)
+            self.cache.append(resize_long_side(img, mask, cache_long_side))
+
     def __len__(self) -> int:
-        return len(self.samples)
+        return len(self.samples) * self.crops_per_image
+
+    def _random_crop(self, image: np.ndarray, mask: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        scale = float(self.rng.uniform(*self.scale_aug))
+        image, mask = resize_long_side(image, mask, int(round(self.work_long_side * scale)))
+        cs = self.crop_size
+        h, w = image.shape[:2]
+        if h < cs or w < cs:
+            pad_h, pad_w = max(0, cs - h), max(0, cs - w)
+            image = cv2.copyMakeBorder(image, 0, pad_h, 0, pad_w, cv2.BORDER_REFLECT_101)
+            mask = cv2.copyMakeBorder(mask, 0, pad_h, 0, pad_w, cv2.BORDER_REFLECT_101)
+            h, w = image.shape[:2]
+        y = int(self.rng.integers(0, h - cs + 1))
+        x = int(self.rng.integers(0, w - cs + 1))
+        return image[y:y + cs, x:x + cs], mask[y:y + cs, x:x + cs]
+
+    def _augment(self, image: np.ndarray, mask: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        if self.rng.uniform() > 0.5:
+            image, mask = np.fliplr(image), np.fliplr(mask)
+        if self.rng.uniform() > 0.5:
+            image, mask = np.flipud(image), np.flipud(mask)
+        k = int(self.rng.integers(0, 4))
+        if k:
+            image, mask = np.rot90(image, k), np.rot90(mask, k)
+        image, mask = np.ascontiguousarray(image), np.ascontiguousarray(mask)
+
+        # Mild photometric jitter (brightness / contrast / per-channel gain)
+        img = image.astype(np.float32)
+        img = (img - img.mean()) * float(self.rng.uniform(0.8, 1.2)) + img.mean() * float(self.rng.uniform(0.85, 1.15))
+        img *= self.rng.uniform(0.92, 1.08, size=(1, 1, 3)).astype(np.float32)
+        image = np.clip(img, 0, 255).astype(np.uint8)
+
+        if self.degrade_prob > 0.0 and self.rng.uniform() < self.degrade_prob:
+            image = apply_underwater_degradation(
+                image, turbidity=float(self.rng.uniform(0.05, 0.45)),
+                red_attenuation=float(self.rng.uniform(0.3, 0.7)),
+                random_seed=int(self.rng.integers(0, 1_000_000))
+            )
+        return image, mask
 
     def __getitem__(self, idx: int) -> Dict[str, Any]:
-        sample = self.samples[idx]
-        image, mask = load_image_and_mask(sample)
+        sample_idx = idx // self.crops_per_image
+        sample = self.samples[sample_idx]
+        image, mask = self.cache[sample_idx]
 
-        # Apply resizing
-        image, mask = resize_image_and_mask(image, mask, target_size=self.image_size)
+        if self.mode == "train":
+            image, mask = self._random_crop(image, mask)
+            image, mask = self._augment(image, mask)
+            orig_hw = image.shape[:2]
+        else:
+            image, orig_hw = pad_to_multiple(image, 16)
+            mask = cv2.copyMakeBorder(mask, 0, image.shape[0] - mask.shape[0], 0,
+                                      image.shape[1] - mask.shape[1], cv2.BORDER_CONSTANT, value=0)
 
-        # Optional simulated underwater degradation
-        if self.degrade_prob > 0.0 and self.rng.uniform() < self.degrade_prob:
-            turbidity = float(self.rng.uniform(0.1, 0.45))
-            image = apply_underwater_degradation(image, turbidity=turbidity)
-
-        # Data augmentation (flips and rotation)
-        if self.augment:
-            if self.rng.uniform() > 0.5:
-                image = np.fliplr(image).copy()
-                mask = np.fliplr(mask).copy()
-            if self.rng.uniform() > 0.5:
-                image = np.flipud(image).copy()
-                mask = np.flipud(mask).copy()
-            k = int(self.rng.integers(0, 4))
-            if k > 0:
-                image = np.rot90(image, k).copy()
-                mask = np.rot90(mask, k).copy()
-
-        # Convert to float PyTorch tensors
-        # Image: [C, H, W] normalized to [0, 1]
-        img_tensor = torch.from_numpy(image.transpose((2, 0, 1))).float() / 255.0
-        # Normalize with ImageNet stats
-        mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
-        std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
-        img_normalized = (img_tensor - mean) / std
-
-        # Mask: [1, H, W] with float 0.0 or 1.0
-        mask_tensor = torch.from_numpy(mask).unsqueeze(0).float()
-
-        # Classification label: 1 if any defect pixel exists, else 0
-        has_defect = 1.0 if mask_tensor.sum() > 10 else 0.0
-        label_tensor = torch.tensor([has_defect], dtype=torch.float32)
+        mask_tensor = torch.from_numpy(mask.astype(np.float32)).unsqueeze(0)
+        # Auxiliary classification label: crop/image contains at least 1% corrosion
+        label_tensor = torch.tensor([1.0 if mask.mean() >= 0.01 else 0.0], dtype=torch.float32)
 
         return {
-            "image": img_normalized,
-            "raw_image": torch.from_numpy(image.transpose((2, 0, 1))).float() / 255.0,
+            "image": torch.from_numpy(to_normalized_tensor_array(image)),
             "mask": mask_tensor,
             "label": label_tensor,
-            "image_id": sample.get("image_id", f"sample_{idx}"),
+            "valid_hw": torch.tensor(orig_hw),
+            "image_id": sample.get("image_id", f"sample_{sample_idx}"),
             "defect_type": sample.get("defect_type", "unknown"),
             "dataset_source": sample.get("dataset_source", "unknown"),
         }
@@ -144,7 +196,8 @@ def load_image_and_mask(sample: Dict[str, Any]) -> Tuple[np.ndarray, np.ndarray]
 
 def scan_mavecodd_samples(
     raw_dir: str | Path,
-    zip_fallback: Optional[str | Path] = None
+    zip_fallback: Optional[str | Path] = None,
+    scene_block_size: int = 5
 ) -> List[Dict[str, Any]]:
     """Scan and index all valid raw image and mask pairs from MaVeCoDD dataset."""
     raw_path = Path(raw_dir)
@@ -168,7 +221,7 @@ def scan_mavecodd_samples(
                 ]
                 lbl_file = next((c for c in lbl_candidates if c.exists()), None)
                 if lbl_file:
-                    scene_id = stem.split("_")[0] if res_type == "LoRes" else stem
+                    scene_id = sequence_scene_id(stem, res_type, scene_block_size)
                     samples.append({
                         "image_id": f"mavecodd_{res_type}_{stem}",
                         "image_path": str(img_file),
@@ -192,7 +245,7 @@ def scan_mavecodd_samples(
                     ]
                     lbl_entry = next((c for c in lbl_candidates if c in namelist), None)
                     if lbl_entry:
-                        scene_id = stem[:12] if res_type == "LoRes" else stem
+                        scene_id = sequence_scene_id(stem, res_type, scene_block_size)
                         samples.append({
                             "image_id": f"mavecodd_{res_type}_{stem}",
                             "zip_path": str(zip_fallback),

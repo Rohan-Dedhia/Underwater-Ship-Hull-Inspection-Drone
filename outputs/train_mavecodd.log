@@ -1,0 +1,68 @@
+======================================================================
+TRAINING PIPELINE: AI-POWERED UNDERWATER HULL INSPECTION DRONE [MAVECODD]
+======================================================================
+Execution Device: cpu
+Loaded splits -> Train: 44, Val: 16
+
+--- Training Traditional ML Baseline (Model A) ---
+Tiling 44 training scenes into 256px patches...
+Training patches: 406 (Defect: 322, Sound: 84)
+Feature matrix shape: (406, 8154)
+Scene-grouped CV over C=[0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0] x PCA=[8, 16, 32, 64] (14 scene groups)...
+Best CV:   C=0.1, PCA=16 -> balanced acc 0.741 +/- 0.148
+Chosen (1-SE rule): C=0.03, PCA=8 -> CV 0.738, train 0.797
+C:\Users\Rohan\FOML_proj\.venv\Lib\site-packages\sklearn\svm\_base.py:236: FutureWarning: The `probability` parameter was deprecated in 1.9 and will be removed in version 1.11. Use `CalibratedClassifierCV(SVC(), ensemble=False)` instead of `SVC(probability=True)`
+  warnings.warn(
+Train balanced accuracy: 0.7899
+Validation balanced accuracy: 0.6484 (160 patches)
+Baseline training completed in 53.61 seconds.
+Saved baseline checkpoint to C:\Users\Rohan\FOML_proj\models\checkpoints\baseline_mavecodd.joblib
+
+--- Training Deep Learning U-Net (Model B) on cpu ---
+Caching resized images...
+Model parameters: 2.05M | train crops/epoch: 132 | val images: 16
+Epoch [01/40] Train Loss 1.4432 Dice 0.2396 | Val Loss 1.3791 Dice 0.2208 | gap +0.0188 | LR 1.00e-03 | 57s
+Epoch [02/40] Train Loss 1.2800 Dice 0.3537 | Val Loss 1.3702 Dice 0.2437 | gap +0.1100 | LR 9.98e-04 | 114s
+Epoch [03/40] Train Loss 1.1420 Dice 0.5814 | Val Loss 1.0598 Dice 0.5781 | gap +0.0033 | LR 9.94e-04 | 170s
+Epoch [04/40] Train Loss 1.1122 Dice 0.5638 | Val Loss 1.0687 Dice 0.5772 | gap -0.0134 | LR 9.86e-04 | 227s
+Epoch [05/40] Train Loss 1.1007 Dice 0.5540 | Val Loss 1.1594 Dice 0.4465 | gap +0.1075 | LR 9.76e-04 | 282s
+Epoch [06/40] Train Loss 1.0094 Dice 0.5909 | Val Loss 1.1423 Dice 0.5050 | gap +0.0859 | LR 9.62e-04 | 338s
+Epoch [07/40] Train Loss 1.0461 Dice 0.6072 | Val Loss 1.0256 Dice 0.5666 | gap +0.0406 | LR 9.46e-04 | 393s
+Epoch [08/40] Train Loss 0.9899 Dice 0.5904 | Val Loss 1.1755 Dice 0.5156 | gap +0.0749 | LR 9.27e-04 | 454s
+Epoch [09/40] Train Loss 1.0661 Dice 0.5943 | Val Loss 1.0050 Dice 0.5965 | gap -0.0022 | LR 9.05e-04 | 519s
+Epoch [10/40] Train Loss 1.0055 Dice 0.6041 | Val Loss 1.0283 Dice 0.6076 | gap -0.0034 | LR 8.81e-04 | 583s
+Epoch [11/40] Train Loss 0.9727 Dice 0.6099 | Val Loss 1.0286 Dice 0.5940 | gap +0.0160 | LR 8.55e-04 | 664s
+Epoch [12/40] Train Loss 0.9622 Dice 0.6146 | Val Loss 0.9373 Dice 0.6171 | gap -0.0025 | LR 8.26e-04 | 753s
+Epoch [13/40] Train Loss 1.0307 Dice 0.5847 | Val Loss 1.0968 Dice 0.5757 | gap +0.0090 | LR 7.96e-04 | 877s
+Epoch [14/40] Train Loss 0.9421 Dice 0.6161 | Val Loss 0.9578 Dice 0.6029 | gap +0.0132 | LR 7.64e-04 | 943s
+Epoch [15/40] Train Loss 1.0200 Dice 0.5939 | Val Loss 0.9133 Dice 0.6135 | gap -0.0196 | LR 7.30e-04 | 1001s
+Epoch [16/40] Train Loss 0.9595 Dice 0.6086 | Val Loss 0.9710 Dice 0.6061 | gap +0.0025 | LR 6.94e-04 | 1062s
+Epoch [17/40] Train Loss 0.9290 Dice 0.6155 | Val Loss 0.9433 Dice 0.6030 | gap +0.0125 | LR 6.58e-04 | 1120s
+Epoch [18/40] Train Loss 0.9466 Dice 0.6169 | Val Loss 0.8875 Dice 0.6133 | gap +0.0035 | LR 6.21e-04 | 1177s
+Epoch [19/40] Train Loss 0.9373 Dice 0.6120 | Val Loss 0.9164 Dice 0.6134 | gap -0.0014 | LR 5.82e-04 | 1267s
+Epoch [20/40] Train Loss 1.0432 Dice 0.6026 | Val Loss 1.0713 Dice 0.5993 | gap +0.0033 | LR 5.44e-04 | 1337s
+Epoch [21/40] Train Loss 0.9124 Dice 0.6245 | Val Loss 0.9422 Dice 0.6008 | gap +0.0237 | LR 5.05e-04 | 1398s
+Epoch [22/40] Train Loss 0.9356 Dice 0.6041 | Val Loss 0.9844 Dice 0.5748 | gap +0.0293 | LR 4.66e-04 | 1457s
+Epoch [23/40] Train Loss 0.8862 Dice 0.6295 | Val Loss 0.9275 Dice 0.6163 | gap +0.0133 | LR 4.28e-04 | 1510s
+Epoch [24/40] Train Loss 0.9383 Dice 0.6237 | Val Loss 0.8542 Dice 0.6303 | gap -0.0066 | LR 3.89e-04 | 1561s
+Epoch [25/40] Train Loss 0.9802 Dice 0.6102 | Val Loss 1.0258 Dice 0.5990 | gap +0.0112 | LR 3.52e-04 | 1613s
+Epoch [26/40] Train Loss 0.8795 Dice 0.6331 | Val Loss 0.8466 Dice 0.6298 | gap +0.0033 | LR 3.16e-04 | 1664s
+Epoch [27/40] Train Loss 0.8878 Dice 0.6311 | Val Loss 0.8729 Dice 0.6194 | gap +0.0118 | LR 2.80e-04 | 1715s
+Epoch [28/40] Train Loss 0.9307 Dice 0.6136 | Val Loss 0.9488 Dice 0.6050 | gap +0.0086 | LR 2.46e-04 | 1767s
+Epoch [29/40] Train Loss 0.8565 Dice 0.6313 | Val Loss 0.8655 Dice 0.6277 | gap +0.0036 | LR 2.14e-04 | 1818s
+Epoch [30/40] Train Loss 0.9099 Dice 0.6200 | Val Loss 0.9262 Dice 0.6118 | gap +0.0083 | LR 1.84e-04 | 1869s
+Epoch [31/40] Train Loss 0.8822 Dice 0.6319 | Val Loss 0.8791 Dice 0.6279 | gap +0.0040 | LR 1.55e-04 | 1921s
+Epoch [32/40] Train Loss 0.8650 Dice 0.6355 | Val Loss 0.8841 Dice 0.6203 | gap +0.0152 | LR 1.29e-04 | 1973s
+Epoch [33/40] Train Loss 0.8851 Dice 0.6279 | Val Loss 0.8800 Dice 0.6208 | gap +0.0071 | LR 1.05e-04 | 2025s
+Epoch [34/40] Train Loss 0.8970 Dice 0.6257 | Val Loss 0.9229 Dice 0.6136 | gap +0.0120 | LR 8.29e-05 | 2076s
+Early stopping at epoch 34: val loss has not improved for 8 epochs (best epoch 26).
+U-Net training completed in 2076.0 s. Restoring best epoch 26.
+Calibrated on validation: pixel threshold=0.5 (val Dice 0.6329), patch area threshold=0.08 (val patch balanced acc 0.9375)
+Saved U-Net checkpoint to C:\Users\Rohan\FOML_proj\models\checkpoints\unet_mavecodd.pth
+
+======================================================================
+TRAINING SUCCESSFUL!
+Baseline saved to: C:\Users\Rohan\FOML_proj\models\checkpoints\baseline_mavecodd.joblib
+U-Net saved to: C:\Users\Rohan\FOML_proj\models\checkpoints\unet_mavecodd.pth
+Summary saved to: C:\Users\Rohan\FOML_proj\outputs\metrics\training_summary_mavecodd.json
+======================================================================

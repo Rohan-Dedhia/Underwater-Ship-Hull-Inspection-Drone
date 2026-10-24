@@ -87,7 +87,7 @@ class HullInspectionSimulator:
         has_defect = False
 
         if self.predictor is not None:
-            ml_result = self.predictor.predict(obs["image"])
+            ml_result = self.predictor.predict(obs["image"], run_baseline=False)
             pred_class = ml_result["predicted_defect_class"]
             confidence = ml_result["confidence_score"]
             status = ml_result["status"]
@@ -161,6 +161,24 @@ class HullInspectionSimulator:
             "status": "in_progress" if not self.is_completed else "completed"
         }
 
+    def get_detection_scores(self) -> Dict[str, Any]:
+        """Score every logged frame: model decision vs the frame's ground truth.
+
+        A frame's ground truth is 'defect' when >= 5% of its pixels are labelled corrosion.
+        """
+        tp = sum(1 for r in self.inspection_logs if r["defect_detected"] and r["ground_truth_defect"])
+        fp = sum(1 for r in self.inspection_logs if r["defect_detected"] and not r["ground_truth_defect"])
+        fn = sum(1 for r in self.inspection_logs if not r["defect_detected"] and r["ground_truth_defect"])
+        tn = sum(1 for r in self.inspection_logs if not r["defect_detected"] and not r["ground_truth_defect"])
+        n = tp + fp + fn + tn
+        return {
+            "frames": n, "TP": tp, "FP": fp, "FN": fn, "TN": tn,
+            "accuracy": (tp + tn) / n if n else None,
+            "precision": tp / (tp + fp) if (tp + fp) else None,
+            "recall": tp / (tp + fn) if (tp + fn) else None,
+            "specificity": tn / (tn + fp) if (tn + fp) else None,
+        }
+
     def run_full_inspection(self, max_steps: int = 400) -> Dict[str, Any]:
         """Run inspection to completion or step limit."""
         while not self.is_completed and self.step_counter < max_steps:
@@ -172,5 +190,6 @@ class HullInspectionSimulator:
             "final_coverage_pct": self.hull.get_coverage_percentage(),
             "total_records": len(self.inspection_logs),
             "defects_detected": sum(1 for r in self.inspection_logs if r["defect_detected"]),
+            "detection_scores": self.get_detection_scores(),
             "missed_regions": self.hull.get_missed_regions()
         }

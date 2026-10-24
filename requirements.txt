@@ -28,7 +28,7 @@ plotly>=5.20.0
 reportlab>=4.1.0
 
 # Dashboard & Interactive UI
-streamlit>=1.35.0
+streamlit>=1.50.0
 
 # Configuration & Utilities
 pyyaml>=6.0.1

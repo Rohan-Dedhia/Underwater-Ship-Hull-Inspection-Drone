@@ -181,3 +181,29 @@ def compute_segmentation_metrics(
         "precision": float(precision),
         "recall": float(recall)
     }
+
+
+def predict_probability_map(
+    model: HullUNet,
+    image: np.ndarray,
+    work_long_side: int = 512,
+    device: Optional[torch.device] = None
+) -> np.ndarray:
+    """Run the U-Net on a full RGB image and return a per-pixel defect probability map.
+
+    The image is resized (aspect ratio kept) so its long side is `work_long_side`,
+    padded to a multiple of 16, passed through the network, then the padding is removed
+    and the map is resized back to the ORIGINAL image resolution.
+    """
+    from src.data.preprocessing import resize_long_side, pad_to_multiple, to_normalized_tensor_array
+
+    dev = device or next(model.parameters()).device
+    h0, w0 = image.shape[:2]
+    work, _ = resize_long_side(image, None, work_long_side)
+    padded, (h, w) = pad_to_multiple(work, 16)
+    x = torch.from_numpy(to_normalized_tensor_array(padded)).unsqueeze(0).to(dev)
+    model.eval()
+    with torch.no_grad():
+        mask_logits, _ = model(x)
+    prob = torch.sigmoid(mask_logits)[0, 0, :h, :w].cpu().numpy()
+    return cv2.resize(prob, (w0, h0), interpolation=cv2.INTER_LINEAR)

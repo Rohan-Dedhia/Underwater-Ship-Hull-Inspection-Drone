@@ -60,26 +60,36 @@ with open(NB_DIR / "01_dataset_exploration.ipynb", "w", encoding="utf-8") as f:
 
 # 2. Notebook 02: Baseline Model
 nb2_cells = [
-    md_cell("# Notebook 02: Traditional ML Baseline (HOG + Color + PCA + SVM)\n\n"
-            "In this notebook, we train and evaluate **Model A**, our handcrafted feature baseline. "
-            "We extract Histogram of Oriented Gradients (HOG) features and HSV color histograms, reduce dimensions with PCA, and fit an SVM."),
+    md_cell("# Notebook 02: Traditional ML Baseline (handcrafted features + SVM)\n\n"
+            "**Model A** classifies 256 px tiles as *defect* (>= 5% corrosion) or *sound* (<= 0.5%). "
+            "Features: Lab colour relative to the whole image, LBP texture and gradient statistics (47 values). "
+            "Hyperparameters are chosen by **scene-grouped cross-validation** on the training split, "
+            "using the one-standard-error rule to prefer the most regularised model."),
     code_cell("import sys\nfrom pathlib import Path\nsys.path.insert(0, str(Path.cwd().parent))\n\n"
+              "import numpy as np\n"
               "from src.utils.config import load_config\n"
               "from src.data.split_dataset import load_split_manifest\n"
-              "from src.models.baseline import HullDefectBaselineClassifier, prepare_patch_dataset\n"
+              "from src.models.baseline import (HullDefectBaselineClassifier, prepare_patch_dataset,\n"
+              "                                 select_hyperparameters_by_group_cv)\n"
               "from src.models.evaluate import evaluate_baseline_on_patches\n\n"
               "config = load_config()\nsplits = load_split_manifest('../data/processed/split_manifest_mavecodd.json')\n"
-              "print(f'Train scenes: {len(splits[\"train\"])}, Test scenes: {len(splits[\"test\"])}')"),
-    md_cell("## 1. Extract Patches and Handcrafted Features"),
-    code_cell("train_imgs, train_y = prepare_patch_dataset(splits['train'], patches_per_sample=4)\n"
-              "print(f'Total training patches: {len(train_imgs)}')\n\n"
-              "model = HullDefectBaselineClassifier(pca_components=64, svm_c=10.0)\n"
-              "X_train = model.extract_batch_features(train_imgs)\n"
-              "print('Feature matrix shape:', X_train.shape)\n"
-              "model.fit(X_train, train_y)\nprint('Baseline model trained successfully!')"),
-    md_cell("## 2. Evaluate Baseline on Held-out Test Set"),
-    code_cell("eval_res = evaluate_baseline_on_patches(model, splits['test'])\n"
-              "for k, v in eval_res.items():\n    print(f'{k}: {v}')")
+              "patch_cfg = {'long_side': 1024, 'patch_size': 256, 'defect_min_frac': 0.05, 'sound_max_frac': 0.005}\n"
+              "print({k: len(v) for k, v in splits.items()})"),
+    md_cell("## 1. Patches, features and grouped cross-validation"),
+    code_cell("train_imgs, train_y, meta = prepare_patch_dataset(splits['train'], return_meta=True, **patch_cfg)\n"
+              "print(f'Training patches: {len(train_imgs)} (defect {train_y.sum()}, sound {(train_y == 0).sum()})')\n\n"
+              "X_train = HullDefectBaselineClassifier().extract_batch_features(train_imgs, [m['context'] for m in meta])\n"
+              "cv = select_hyperparameters_by_group_cv(X_train, train_y, [m['scene_id'] for m in meta],\n"
+              "                                        c_values=[0.03, 0.1, 0.3, 1, 3, 10], pca_values=[None, 8, 16])\n"
+              "print('Chosen:', cv['chosen'])\n\n"
+              "model = HullDefectBaselineClassifier(use_pca=cv['chosen']['pca_components'] is not None,\n"
+              "                                     pca_components=cv['chosen']['pca_components'] or 16,\n"
+              "                                     svm_c=cv['chosen']['C']).fit(X_train, train_y)"),
+    md_cell("## 2. Train vs validation vs test (overfitting check)"),
+    code_cell("for split in ['train', 'val', 'test']:\n"
+              "    r = evaluate_baseline_on_patches(model, splits[split], patch_cfg)\n"
+              "    print(f\"{split:5s} balanced acc {r['balanced_accuracy']:.3f}  recall {r['recall']:.3f}  \"\n"
+              "          f\"precision {r['precision']:.3f}  {r['confusion_matrix']}\")")
 ]
 
 with open(NB_DIR / "02_baseline_model.ipynb", "w", encoding="utf-8") as f:
@@ -88,24 +98,33 @@ with open(NB_DIR / "02_baseline_model.ipynb", "w", encoding="utf-8") as f:
 # 3. Notebook 03: CNN Training
 nb3_cells = [
     md_cell("# Notebook 03: Deep Learning U-Net Training & Segmentation\n\n"
-            "Here we train **Model B**, a dual-head lightweight U-Net on MaVeCoDD corrosion segmentation. "
-            "We optimize a combined Binary Cross-Entropy + Soft Dice Loss to overcome foreground-background class imbalance."),
+            "**Model B** is a compact U-Net trained on random 256 px crops (zoom, flips, rotations, colour jitter, "
+            "simulated turbidity) with a BCE + soft Dice loss. Train and validation Dice are measured on full images "
+            "every epoch, and early stopping keeps the epoch with the lowest validation loss."),
     code_cell("import sys\nfrom pathlib import Path\nsys.path.insert(0, str(Path.cwd().parent))\n\n"
-              "import torch\nfrom src.utils.config import load_config\n"
+              "import json\nimport matplotlib.pyplot as plt\n"
+              "from src.utils.config import load_config\n"
               "from src.utils.reproducibility import get_device\n"
               "from src.data.split_dataset import load_split_manifest\n"
-              "from src.models.cnn import HullUNet\n"
-              "from src.models.train import train_unet\n\n"
+              "from src.models.cnn import HullUNet\n\n"
               "config = load_config()\ndev = get_device('auto')\nprint('Using device:', dev)\n"
               "splits = load_split_manifest('../data/processed/split_manifest_mavecodd.json')"),
-    md_cell("## 1. Model Architecture & Parameters"),
-    code_cell("unet = HullUNet(in_channels=3, out_channels=1, base_channels=24).to(dev)\n"
-              "total_params = sum(p.numel() for p in unet.parameters())\n"
-              "print(f'Total trainable parameters: {total_params:,}')"),
-    md_cell("## 2. Train U-Net on Training Split"),
-    code_cell("config['cnn_model']['epochs'] = 5\n"
-              "results = train_unet(splits['train'], splits['val'], config=config, device=dev)\n"
-              "print('Training complete! Best val loss:', results['best_val_loss'])")
+    md_cell("## 1. Model size"),
+    code_cell("unet = HullUNet(base_channels=config['cnn_model']['base_channels'])\n"
+              "print(f\"Trainable parameters: {sum(p.numel() for p in unet.parameters()):,}\")"),
+    md_cell("## 2. Learning curves of the trained model\n\n"
+            "Full training takes ~40 min on CPU: `python scripts/train_model.py --dataset mavecodd`. "
+            "To retrain here instead, use `src.models.train.train_unet(splits['train'], splits['val'], config=config)`."),
+    code_cell("summary = json.load(open('../outputs/metrics/training_summary_mavecodd.json'))\n"
+              "h = summary['unet']['history']\n"
+              "fig, ax = plt.subplots(1, 2, figsize=(11, 4))\n"
+              "ax[0].plot(h['epoch'], h['train_loss'], 'o-', label='train'); ax[0].plot(h['epoch'], h['val_loss'], 's-', label='val')\n"
+              "ax[0].set_title('Loss'); ax[0].legend()\n"
+              "ax[1].plot(h['epoch'], h['train_dice'], 'o-', label='train'); ax[1].plot(h['epoch'], h['val_dice'], 's-', label='val')\n"
+              "ax[1].set_title('Dice'); ax[1].set_ylim(0, 1); ax[1].legend()\nplt.show()\n"
+              "cal = summary['unet']['calibration']\n"
+              "print('Kept epoch:', summary['unet']['best_epoch'], '| pixel threshold:', cal['mask_threshold'],\n"
+              "      '| area threshold:', cal['patch_area_threshold'])")
 ]
 
 with open(NB_DIR / "03_cnn_training.ipynb", "w", encoding="utf-8") as f:
@@ -113,32 +132,29 @@ with open(NB_DIR / "03_cnn_training.ipynb", "w", encoding="utf-8") as f:
 
 # 4. Notebook 04: Model Evaluation
 nb4_cells = [
-    md_cell("# Notebook 04: Comparative Model Evaluation & Research Question Experiments\n\n"
-            "This notebook analyzes the experimental results addressing all 6 FOML research questions: "
-            "traditional ML vs CNN, underwater optical degradation, class imbalance, and cross-domain transfer."),
+    md_cell("# Notebook 04: Comparative Model Evaluation\n\n"
+            "Results produced by `python scripts/evaluate_model.py --dataset mavecodd`: both models on the same "
+            "test tiles, train/val/test overfitting check, turbidity stress test and cross-domain transfer."),
     code_cell("import sys\nfrom pathlib import Path\nsys.path.insert(0, str(Path.cwd().parent))\n\n"
               "import json\nimport pandas as pd\nimport matplotlib.pyplot as plt\n\n"
               "with open('../outputs/metrics/test_metrics_mavecodd.json', 'r') as f:\n"
-              "    metrics = json.load(f)\n\n"
-              "print('Evaluation summary loaded successfully.')"),
-    md_cell("## 1. Traditional ML Baseline vs Deep Learning U-Net"),
-    code_cell("base = metrics['baseline_model_a']\nunet = metrics['deep_learning_model_b']\n\n"
-              "df = pd.DataFrame([\n"
-              "    {'Metric': 'Accuracy', 'Baseline SVM': base['accuracy'], 'U-Net': unet['classification_accuracy']},\n"
-              "    {'Metric': 'Precision', 'Baseline SVM': base['precision'], 'U-Net': unet['classification_precision']},\n"
-              "    {'Metric': 'Recall', 'Baseline SVM': base['recall'], 'U-Net': unet['classification_recall']},\n"
-              "    {'Metric': 'F1-Score', 'Baseline SVM': base['f1_score'], 'U-Net': unet['classification_f1']},\n"
-              "])\nprint(df.to_string(index=False))"),
-    md_cell("## 2. Optical Turbidity Degradation Stress Test"),
+              "    metrics = json.load(f)\n"
+              "print(metrics['evaluation_protocol']['split_sizes'])"),
+    md_cell("## 1. Overfitting check (train vs held-out)"),
+    code_cell("pd.DataFrame(metrics['overfitting_check']).T"),
+    md_cell("## 2. Model A vs Model B on the same test tiles"),
+    code_cell("base = metrics['baseline_model_a']['test']\nunet = metrics['deep_learning_model_b']['test']['patch_classification']\n"
+              "keys = ['balanced_accuracy', 'accuracy', 'precision', 'recall', 'f1_score', 'roc_auc']\n"
+              "pd.DataFrame({'Model A (features+SVM)': [base[k] for k in keys], 'Model B (U-Net)': [unet[k] for k in keys]}, index=keys)"),
+    md_cell("## 3. Optical turbidity stress test"),
     code_cell("deg = pd.DataFrame(metrics['optical_degradation_stress_test'])\n"
               "plt.figure(figsize=(8, 4.5))\n"
-              "plt.plot(deg['turbidity'], deg['mean_iou'], marker='o', label='Mean IoU')\n"
-              "plt.plot(deg['turbidity'], deg['mean_dice'], marker='s', label='Mean Dice')\n"
-              "plt.xlabel('Turbidity Scattering Coefficient')\nplt.ylabel('Score')\n"
-              "plt.title('Performance vs Underwater Turbidity')\nplt.legend()\nplt.grid(True)\nplt.show()"),
-    md_cell("## 3. Cross-Domain Generalization to Underwater Cracks"),
-    code_cell("cross = metrics['cross_domain_generalization']\n"
-              "print('Cross-domain metrics:', cross)")
+              "plt.plot(deg['turbidity'], deg['unet_mean_dice'], marker='o', label='U-Net Dice')\n"
+              "plt.plot(deg['turbidity'], deg['unet_patch_balanced_accuracy'], marker='s', label='U-Net tile balanced acc')\n"
+              "plt.plot(deg['turbidity'], deg['baseline_patch_balanced_accuracy'], marker='^', label='SVM tile balanced acc')\n"
+              "plt.xlabel('Turbidity')\nplt.ylim(0, 1.05)\nplt.legend()\nplt.grid(True)\nplt.show()"),
+    md_cell("## 4. Cross-domain generalisation to underwater cracks"),
+    code_cell("metrics['cross_domain_generalization']")
 ]
 
 with open(NB_DIR / "04_model_evaluation.ipynb", "w", encoding="utf-8") as f:

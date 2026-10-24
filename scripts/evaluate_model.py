@@ -1,11 +1,9 @@
-"""Evaluation runner script comparing Baseline and U-Net models on test splits and stress experiments."""
+"""Evaluation runner: both models on train/val/test splits, overfitting check, stress tests."""
 
-import os
 import sys
 import argparse
 import json
 from pathlib import Path
-import pandas as pd
 
 # Add repository root to path
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,16 +16,17 @@ from src.models.baseline import HullDefectBaselineClassifier
 from src.models.predict import HullInspectionPredictor
 from src.models.evaluate import (
     evaluate_baseline_on_patches,
-    evaluate_unet_on_test_set,
+    evaluate_unet,
     evaluate_underwater_degradation_stress_test,
-    save_evaluation_plots
+    overfitting_verdict,
+    save_evaluation_plots,
 )
 
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate underwater hull inspection models.")
     parser.add_argument("--dataset", choices=["mavecodd", "crack", "sample"], default="mavecodd",
-                        help="Dataset test split to evaluate on (default: mavecodd)")
+                        help="Dataset to evaluate on (default: mavecodd)")
     parser.add_argument("--device", choices=["auto", "cuda", "cpu"], default="auto", help="Compute device")
     args = parser.parse_args()
 
@@ -36,101 +35,122 @@ def main():
     print("=" * 70)
 
     config = load_config()
-    set_seed(config.get("random_seed", 42))
+    set_seed(config.get("project", {}).get("random_seed", 42))
     dev = get_device(args.device)
+    ds = config["dataset"]
+    patch_cfg = {
+        "long_side": ds.get("patch_long_side", 1024),
+        "patch_size": ds.get("patch_size", 256),
+        "defect_min_frac": ds.get("patch_defect_min_frac", 0.05),
+        "sound_max_frac": ds.get("patch_sound_max_frac", 0.005),
+    }
 
     checkpoints_dir = ROOT / config["paths"]["model_dir"]
     baseline_path = checkpoints_dir / f"baseline_{args.dataset}.joblib"
     unet_path = checkpoints_dir / f"unet_{args.dataset}.pth"
-
     if not baseline_path.exists() or not unet_path.exists():
-        print("Required model checkpoints not found. Running training first...")
-        from scripts.train_model import main as train_main
-        sys.argv = ["train_model.py", "--dataset", args.dataset, "--device", args.device]
-        train_main()
+        print("Required model checkpoints not found. Run scripts/train_model.py first.")
+        sys.exit(1)
 
-    # Load test split
     manifest_file = ROOT / config["paths"]["processed_dir"] / f"split_manifest_{args.dataset}.json"
     splits = load_split_manifest(manifest_file)
-    test_samples = splits["test"]
-    print(f"Loaded {len(test_samples)} held-out test scenes.")
+    print("Split sizes: " + ", ".join(f"{k}={len(v)}" for k, v in splits.items()))
 
-    # 1. Evaluate Model A (Baseline SVM)
-    print("\n[1/4] Evaluating Model A (HOG+Color+PCA+SVM) on Test Patches...")
     baseline_model = HullDefectBaselineClassifier.load(baseline_path)
-    baseline_eval = evaluate_baseline_on_patches(baseline_model, test_samples)
-    print(f"  * Accuracy:  {baseline_eval.get('accuracy', 'N/A')}")
-    print(f"  * Precision: {baseline_eval.get('precision', 'N/A')}")
-    print(f"  * Recall:    {baseline_eval.get('recall', 'N/A')}")
-    print(f"  * F1-Score:  {baseline_eval.get('f1_score', 'N/A')}")
-    print(f"  * False Negatives: {baseline_eval.get('false_negatives', 'N/A')}")
-    print(f"  * Latency per image: {baseline_eval.get('latency_ms_per_image', 'N/A')} ms")
+    predictor = HullInspectionPredictor(baseline_path=baseline_path, unet_path=unet_path, device=dev)
+    print(f"U-Net thresholds (calibrated on val): pixel={predictor.mask_threshold}, "
+          f"area={predictor.detection_area_threshold}")
 
-    # 2. Evaluate Model B (U-Net CNN)
-    print("\n[2/4] Evaluating Model B (Deep Learning U-Net) on Test Set...")
-    predictor = HullInspectionPredictor(
-        baseline_path=baseline_path,
-        unet_path=unet_path,
-        device=dev
-    )
-    unet_eval = evaluate_unet_on_test_set(predictor, test_samples)
-    print(f"  * Mean IoU:          {unet_eval['mean_iou']}")
-    print(f"  * Mean Dice Score:   {unet_eval['mean_dice']}")
-    print(f"  * Pixel Accuracy:    {unet_eval['mean_pixel_accuracy']}")
-    print(f"  * Class Accuracy:    {unet_eval['classification_accuracy']}")
-    print(f"  * Class Precision:   {unet_eval['classification_precision']}")
-    print(f"  * Class Recall:      {unet_eval['classification_recall']}")
-    print(f"  * Class F1-Score:    {unet_eval['classification_f1']}")
-    print(f"  * False Negatives:   {unet_eval['false_negatives']}")
-    print(f"  * Latency per image: {unet_eval['latency_ms_per_image']} ms")
+    baseline_eval, unet_eval = {}, {}
+    for split in ["train", "val", "test"]:
+        print(f"\n[{split.upper()}] Model A (baseline) on patches...")
+        baseline_eval[split] = evaluate_baseline_on_patches(baseline_model, splits[split], patch_cfg)
+        b = baseline_eval[split]
+        print(f"  balanced acc {b['balanced_accuracy']}  acc {b['accuracy']}  P {b['precision']}  "
+              f"R {b['recall']}  F1 {b['f1_score']}  ({b['n_patches']} patches: "
+              f"{b['n_defect_patches']} defect / {b['n_sound_patches']} sound)")
+        print(f"[{split.upper()}] Model B (U-Net)...")
+        unet_eval[split] = evaluate_unet(predictor, splits[split], patch_cfg)
+        u = unet_eval[split]
+        pc = u["patch_classification"]
+        print(f"  Dice {u['mean_dice']}  IoU {u['mean_iou']}  | patch balanced acc {pc['balanced_accuracy']}  "
+              f"P {pc['precision']}  R {pc['recall']}  F1 {pc['f1_score']}")
 
-    # 3. Turbidity Degradation Stress Test (Research Question 2)
-    print("\n[3/4] Running Optical Turbidity Degradation Stress Test...")
-    degradation_results = evaluate_underwater_degradation_stress_test(
-        predictor,
-        test_samples,
-        turbidity_levels=[0.0, 0.15, 0.30, 0.45, 0.60]
-    )
+    ci = {
+        "baseline_patch_balanced_accuracy": baseline_eval["test"].get("balanced_accuracy_ci95"),
+        "unet_patch_balanced_accuracy": unet_eval["test"]["patch_classification"].get("balanced_accuracy_ci95"),
+        "unet_dice": unet_eval["test"].get("mean_dice_ci95"),
+    }
+    overfit = {
+        "baseline_patch_balanced_accuracy": overfitting_verdict(
+            *[baseline_eval[s]["balanced_accuracy"] for s in ("train", "val", "test")]),
+        "unet_patch_balanced_accuracy": overfitting_verdict(
+            *[unet_eval[s]["patch_classification"]["balanced_accuracy"] for s in ("train", "val", "test")]),
+        "unet_dice": overfitting_verdict(*[unet_eval[s]["mean_dice"] for s in ("train", "val", "test")]),
+    }
+    for k, v in overfit.items():
+        v["test_ci95"] = ci[k]
+        v["train_within_test_ci"] = bool(ci[k] and ci[k][0] is not None and ci[k][0] <= v["train"] <= ci[k][1])
+    print("\nOVERFITTING CHECK (train vs held-out):")
+    for k, v in overfit.items():
+        print(f"  {k:36s} train {v['train']:.3f} | val {v['val']:.3f} | test {v['test']:.3f} | "
+              f"gap {v['gap']:+.3f} -> {v['verdict']} | test 95% CI {v['test_ci95']}")
+
+    print("\nOptical turbidity stress test on TEST split...")
+    degradation_results = evaluate_underwater_degradation_stress_test(predictor, splits["test"], patch_cfg)
     for d in degradation_results:
-        print(f"  * Turbidity {d['turbidity']:.2f} ({d['condition']}): IoU={d['mean_iou']:.4f}, Dice={d['mean_dice']:.4f}, Recall={d['mean_recall']:.4f}")
+        print(f"  turbidity {d['turbidity']:.2f} ({d['condition']}): U-Net Dice {d['unet_mean_dice']:.3f}, "
+              f"U-Net patch bal acc {d['unet_patch_balanced_accuracy']:.3f}, "
+              f"baseline patch bal acc {d['baseline_patch_balanced_accuracy']}")
 
-    # 4. Cross-Domain Generalization Test (Research Question 6)
-    crack_manifest = ROOT / config["paths"]["processed_dir"] / "split_manifest_crack.json"
     cross_domain_metrics = None
+    crack_manifest = ROOT / config["paths"]["processed_dir"] / "split_manifest_crack.json"
     if crack_manifest.exists() and args.dataset != "crack":
-        print("\n[4/4] Running Cross-Domain Generalization Experiment (Dry-dock to Underwater)...")
-        crack_splits = load_split_manifest(crack_manifest)
-        crack_test = crack_splits["test"][:25]  # Subset for evaluation
-        cross_eval = evaluate_unet_on_test_set(predictor, crack_test)
-        print(f"  * Cross-Domain IoU on Underwater Crack: {cross_eval['mean_iou']}")
-        print(f"  * Cross-Domain Dice Score: {cross_eval['mean_dice']}")
+        print("\nCross-domain test: corrosion U-Net on Underwater Crack test images (zero-shot)...")
+        crack_test = load_split_manifest(crack_manifest)["test"][:40]
+        cross = evaluate_unet(predictor, crack_test, patch_cfg)
         cross_domain_metrics = {
             "source_dataset": args.dataset,
             "target_dataset": "underwater_crack",
-            "cross_domain_iou": cross_eval["mean_iou"],
-            "cross_domain_dice": cross_eval["mean_dice"],
-            "cross_domain_accuracy": cross_eval["classification_accuracy"]
+            "n_images": len(crack_test),
+            "cross_domain_iou": cross["mean_iou"],
+            "cross_domain_dice": cross["mean_dice"],
+            "cross_domain_pixel_recall": cross["pixel_recall"],
         }
+        print(f"  Dice {cross['mean_dice']}  IoU {cross['mean_iou']}  pixel recall {cross['pixel_recall']}")
 
-    # Save metrics and figures
-    metrics_dir = ROOT / config["paths"]["metrics_dir"]
-    figures_dir = ROOT / config["paths"]["figures_dir"]
-    metrics_dir.mkdir(parents=True, exist_ok=True)
-    figures_dir.mkdir(parents=True, exist_ok=True)
+    summary_file = ROOT / config["paths"]["metrics_dir"] / f"training_summary_{args.dataset}.json"
+    history = None
+    if summary_file.exists():
+        history = json.loads(summary_file.read_text()).get("unet", {}).get("history")
 
     final_metrics = {
         "dataset": args.dataset,
+        "evaluation_protocol": {
+            "split_sizes": {k: len(v) for k, v in splits.items()},
+            "split_scene_groups": {k: sorted({s["scene_id"] for s in v}) for k, v in splits.items()},
+            "patch_config": patch_cfg,
+            "unet_mask_threshold": predictor.mask_threshold,
+            "unet_detection_area_threshold": predictor.detection_area_threshold,
+            "thresholds_chosen_on": "validation split",
+        },
         "baseline_model_a": baseline_eval,
         "deep_learning_model_b": unet_eval,
+        "overfitting_check": overfit,
         "optical_degradation_stress_test": degradation_results,
-        "cross_domain_generalization": cross_domain_metrics
+        "cross_domain_generalization": cross_domain_metrics,
     }
 
+    metrics_dir = ROOT / config["paths"]["metrics_dir"]
+    figures_dir = ROOT / config["paths"]["figures_dir"]
+    if args.dataset != "mavecodd":
+        # keep the primary (MaVeCoDD) figures from being overwritten by quick-start runs
+        figures_dir = figures_dir / args.dataset
+    metrics_dir.mkdir(parents=True, exist_ok=True)
     metrics_out = metrics_dir / f"test_metrics_{args.dataset}.json"
     with open(metrics_out, "w", encoding="utf-8") as f:
         json.dump(final_metrics, f, indent=2)
-
-    save_evaluation_plots(baseline_eval, unet_eval, degradation_results, figures_dir)
+    save_evaluation_plots(final_metrics, history, figures_dir)
 
     print("\n" + "=" * 70)
     print("EVALUATION FINISHED!")

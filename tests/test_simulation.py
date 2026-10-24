@@ -116,3 +116,30 @@ def test_hud_rendering():
     assert hud.shape == (240, 320, 3)
     # HUD should have drawn graphics (reticle, text) modifying frame values
     assert not np.array_equal(hud, dummy_frame)
+
+
+def test_synthetic_camera_frames_carry_ground_truth():
+    """Without real photos, frames over a registered defect contain painted corrosion and GT says so."""
+    from src.simulation.hull import ShipHullSurface
+    cam = SimulatedUnderwaterCamera(resolution=(320, 240), frame_samples=[])
+    hull = ShipHullSurface(length_m=20.0, height_m=10.0)
+    hull.add_defect(10.0, 5.0, 1.0, "corrosion")
+    over = cam.capture_observation(10.0, 5.0, 1.5, hull.defects)
+    away = cam.capture_observation(2.0, 2.0, 1.5, hull.defects)
+    assert over["ground_truth_defect"] is True and over["ground_truth_mask"].mean() > 0.05
+    assert away["ground_truth_defect"] is False and away["ground_truth_mask"].sum() == 0
+
+
+def test_simulator_scores_frames_against_ground_truth():
+    from src.simulation.hull import ShipHullSurface
+    from src.simulation.simulator import HullInspectionSimulator
+    hull = ShipHullSurface(length_m=20.0, height_m=6.0)
+    hull.add_defect(3.0, 1.2, 1.0, "corrosion")
+    sim = HullInspectionSimulator(hull=hull, camera=SimulatedUnderwaterCamera(resolution=(320, 240), frame_samples=[]))
+    for _ in range(10):
+        sim.step(dt_s=0.5)
+    # Without a predictor nothing is flagged: every GT-defect frame counts as a miss
+    sc = sim.get_detection_scores()
+    assert sc["frames"] == 10
+    assert sc["TP"] == 0 and sc["FP"] == 0
+    assert sc["FN"] == sum(r["ground_truth_defect"] for r in sim.inspection_logs)

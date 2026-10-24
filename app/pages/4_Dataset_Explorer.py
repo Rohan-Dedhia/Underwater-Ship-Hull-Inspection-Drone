@@ -17,11 +17,13 @@ st.set_page_config(page_title="Dataset Explorer | Hull AI", layout="wide")
 from src.data.dataset_loader import scan_mavecodd_samples, scan_crack_samples, load_image_and_mask
 from src.data.split_dataset import load_split_manifest
 
-st.title("📂 Dataset Explorer & Annotation Inspector")
-st.markdown("Detailed breakdown of primary (MaVeCoDD), secondary (Underwater Crack), and synthetic datasets.")
+from app.ui import inject_css, page_header, badge, load_split_lookup
+
+inject_css()
+page_header("🗂️ Dataset explorer", "Browse the photos and their human-drawn corrosion masks, and see exactly how the data was split.")
 
 # Dataset selection
-ds_tab = st.radio("Select Dataset to Explore", ["MaVeCoDD (Marine Vessel Corrosion)", "Underwater Crack Dataset", "Train/Val/Test Splits Manifest"], horizontal=True)
+ds_tab = st.segmented_control("Dataset", ["MaVeCoDD (Marine Vessel Corrosion)", "Underwater Crack Dataset", "Train/Val/Test Splits Manifest"], default="MaVeCoDD (Marine Vessel Corrosion)") or "MaVeCoDD (Marine Vessel Corrosion)"
 
 if ds_tab == "MaVeCoDD (Marine Vessel Corrosion)":
     st.subheader("🚢 MaVeCoDD: Marine Vessel Corrosion in Dry-Dock")
@@ -41,13 +43,17 @@ if ds_tab == "MaVeCoDD (Marine Vessel Corrosion)":
         with c1:
             st.write("##### Resolution Distribution")
             fig_pie = px.pie(df_mav, names="resolution_tier", title="MaVeCoDD Resolution Split", color_discrete_sequence=["#0984e3", "#00cec9"])
-            st.plotly_chart(fig_pie, use_container_width=True)
+            st.plotly_chart(fig_pie, width="stretch")
 
         with c2:
             st.write("##### Sample Gallery & Mask Inspector")
             sample_idx = st.slider("Select Sample Index", 0, len(mav_samples)-1, 0)
             s = mav_samples[sample_idx]
             img, mask = load_image_and_mask(s)
+            split_of = load_split_lookup("mavecodd").get(s["image_id"])
+            kind = {"test": "good", "val": "fair", "train": "neutral"}.get(split_of, "neutral")
+            st.markdown(f"**{s['image_id'].replace('mavecodd_', '')}** · scene group `{s['scene_id']}` · "
+                        f"split {badge((split_of or 'unknown').upper(), kind)}", unsafe_allow_html=True)
 
             alpha = st.slider("Mask Overlay Opacity", 0.0, 1.0, 0.4, 0.05)
             color_mask = np.zeros_like(img)
@@ -55,8 +61,8 @@ if ds_tab == "MaVeCoDD (Marine Vessel Corrosion)":
             blended = cv2.addWeighted(img, 1.0 - alpha, color_mask, alpha, 0)
 
             c_img1, c_img2 = st.columns(2)
-            c_img1.image(img, caption=f"Raw Image: {s['image_id']} ({img.shape[1]}x{img.shape[0]})", use_container_width=True)
-            c_img2.image(blended, caption=f"Ground-Truth Mask (Defect: {(np.sum(mask>0)/mask.size)*100:.2f}% of pixels)", use_container_width=True)
+            c_img1.image(img, caption=f"Raw Image: {s['image_id']} ({img.shape[1]}x{img.shape[0]})", width="stretch")
+            c_img2.image(blended, caption=f"Ground-Truth Mask (Defect: {(np.sum(mask>0)/mask.size)*100:.2f}% of pixels)", width="stretch")
 
 elif ds_tab == "Underwater Crack Dataset":
     st.subheader("🌊 Underwater Concrete & Submerged Structure Cracks")
@@ -81,36 +87,43 @@ elif ds_tab == "Underwater Crack Dataset":
         blended = cv2.addWeighted(img, 1.0 - alpha, color_mask, alpha, 0)
 
         c1, c2 = st.columns(2)
-        c1.image(img, caption=f"Underwater Image: {s['image_id']} (512x512)", use_container_width=True)
-        c2.image(blended, caption=f"Ground-Truth Crack Mask (Coverage: {(np.sum(mask>0)/mask.size)*100:.2f}%)", use_container_width=True)
+        c1.image(img, caption=f"Underwater Image: {s['image_id']} (512x512)", width="stretch")
+        c2.image(blended, caption=f"Ground-Truth Crack Mask (Coverage: {(np.sum(mask>0)/mask.size)*100:.2f}%)", width="stretch")
 
 else:
-    st.subheader("📊 Train / Validation / Test Stratification & Split Manifests")
+    st.subheader("📊 Train / Validation / Test Split")
     st.markdown("""
-    To ensure scientific rigor and avoid test set contamination:
-    - **Grouping**: Samples are grouped by vessel hull scene (`scene_id`) or video capture sequence.
-    - **Proportions**: 70% Training, 15% Validation, 15% Test.
-    - **No Data Leakage**: Near-duplicate frames from the same video are strictly confined to a single split partition.
+- **Grouping**: consecutive frame numbers (e.g. `colorImage1005`–`1009`) are near-duplicates from the same video or
+  photo burst, so they form one *scene group*. A group is assigned to exactly one split.
+- **Stratification**: HiRes and LoRes groups are split separately, so every split contains both camera types.
+- **Proportions**: about 60% train / 20% validation / 20% test of the scene groups.
+- **Use**: train = fit model weights · validation = early stopping + decision thresholds · test = final numbers only.
     """)
 
     manifest_file = ROOT / "data" / "processed" / "split_manifest_mavecodd.json"
     if manifest_file.exists():
         splits = load_split_manifest(manifest_file)
-        split_summary = pd.DataFrame([
-            {"Partition": "Train (70%)", "Scene Count": len(splits["train"]), "Purpose": "Model parameter optimization and augmentations"},
-            {"Partition": "Validation (15%)", "Scene Count": len(splits["val"]), "Purpose": "Hyperparameter tuning, early stopping, and threshold calibration"},
-            {"Partition": "Test (15%)", "Scene Count": len(splits["test"]), "Purpose": "Held-out unbiased evaluation and benchmark comparison"},
-        ])
-        st.dataframe(split_summary, use_container_width=True, hide_index=True)
+        rows = []
+        for name in ["train", "val", "test"]:
+            items = splits[name]
+            rows.append({
+                "Split": name,
+                "Images": len(items),
+                "HiRes": sum(1 for s in items if s.get("resolution_tier") == "HiRes"),
+                "LoRes": sum(1 for s in items if s.get("resolution_tier") == "LoRes"),
+                "Scene groups": len({s["scene_id"] for s in items}),
+                "Groups": ", ".join(sorted({s["scene_id"] for s in items})),
+            })
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
-        fig_splits = px.bar(
-            split_summary,
-            x="Partition",
-            y="Scene Count",
-            color="Partition",
-            color_discrete_sequence=["#0984e3", "#fdcb6e", "#00b894"],
-            title="MaVeCoDD Leakage-Free Split Partition Counts"
-        )
-        st.plotly_chart(fig_splits, use_container_width=True)
+        all_train = {s["scene_id"] for s in splits["train"]}
+        overlap = all_train & ({s["scene_id"] for s in splits["val"]} | {s["scene_id"] for s in splits["test"]})
+        st.markdown("**Leakage check:** " + ("✅ no scene group appears in more than one split." if not overlap
+                                              else f"❌ shared groups: {sorted(overlap)}"))
+
+        with st.expander("Every image and its split"):
+            st.dataframe(pd.DataFrame([{"image_id": s["image_id"], "scene group": s["scene_id"], "split": name}
+                                       for name in ["train", "val", "test"] for s in splits[name]]),
+                         width="stretch", hide_index=True)
     else:
         st.warning("Split manifest not found. Run `python scripts/prepare_dataset.py` to generate.")

@@ -1,0 +1,14 @@
+# Dashboard theme. No `base` is set, so Streamlit follows the viewer's light/dark preference.
+# The accent colour is also used as text on selected controls, so each mode gets a shade
+# with enough contrast against its own background.
+[theme]
+primaryColor = "#127a7a"
+
+[theme.light]
+primaryColor = "#127a7a"
+
+[theme.dark]
+primaryColor = "#1a9488"
+
+[client]
+toolbarMode = "minimal"
